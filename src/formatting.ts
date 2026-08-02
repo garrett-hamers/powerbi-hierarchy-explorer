@@ -9,6 +9,8 @@ export interface FormattingValues {
   horizontalGap: number;
   verticalGap: number;
   padding: number;
+  zoom: number;
+  fitContent: boolean;
   backgroundColor: string;
   nodeColor: string;
   selectedColor: string;
@@ -33,6 +35,8 @@ export const DEFAULT_FORMATTING: FormattingValues = {
   horizontalGap: 38,
   verticalGap: 14,
   padding: 12,
+  zoom: 1,
+  fitContent: true,
   backgroundColor: "#ffffff",
   nodeColor: "#ffffff",
   selectedColor: "#2764c4",
@@ -144,6 +148,16 @@ export function readFormattingValues(dataView?: powerbi.DataView): FormattingVal
       DEFAULT_FORMATTING.padding,
       4,
       64
+    ),
+    zoom: numberValue(
+      objectProperty(objects, "layout", "zoom"),
+      DEFAULT_FORMATTING.zoom,
+      0.5,
+      2.5
+    ),
+    fitContent: booleanValue(
+      objectProperty(objects, "layout", "fitContent"),
+      DEFAULT_FORMATTING.fitContent
     ),
     backgroundColor: readColor(
       objects,
@@ -339,7 +353,16 @@ export function buildFormattingModel(
   values: FormattingValues,
   localize: Localize
 ): powerbi.visuals.FormattingModel {
-  const layoutProperties = ["direction", "nodeWidth", "nodeHeight", "horizontalGap", "verticalGap", "padding"];
+  const layoutProperties = [
+    "direction",
+    "nodeWidth",
+    "nodeHeight",
+    "horizontalGap",
+    "verticalGap",
+    "padding",
+    "zoom",
+    "fitContent"
+  ];
   const colorProperties = ["backgroundColor", "nodeColor", "selectedColor"];
   const typographyProperties = ["labelColor", "subtitleColor", "fontFamily", "fontSize", "subtitleFontSize"];
   const edgeProperties = ["edgeColor", "edgeWidth"];
@@ -364,7 +387,9 @@ export function buildFormattingModel(
               numberSlice("layout", "nodeHeight", localize("Format_NodeHeight", "Node height"), values.nodeHeight, 32, 140),
               numberSlice("layout", "horizontalGap", localize("Format_HorizontalGap", "Horizontal spacing"), values.horizontalGap, 8, 160),
               numberSlice("layout", "verticalGap", localize("Format_VerticalGap", "Vertical spacing"), values.verticalGap, 4, 96),
-              numberSlice("layout", "padding", localize("Format_Padding", "Canvas padding"), values.padding, 4, 64)
+              numberSlice("layout", "padding", localize("Format_Padding", "Canvas padding"), values.padding, 4, 64),
+              numberSlice("layout", "zoom", localize("Format_Zoom", "Zoom"), values.zoom, 0.5, 2.5),
+              toggleSlice("layout", "fitContent", localize("Format_FitContent", "Fit labels to content"), values.fitContent)
             ]
           }
         ],

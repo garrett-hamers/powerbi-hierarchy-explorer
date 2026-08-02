@@ -40,6 +40,19 @@ describe("buildHierarchy", () => {
     );
   });
 
+  test("retains source identity with the first conflicting row", () => {
+    const graph = buildHierarchy([
+      { nodeId: "same", parentId: null, label: "First", sourceRow: 0, sourceKey: "identity:first" },
+      { nodeId: "same", parentId: "other", label: "Second", sourceRow: 1, sourceKey: "identity:second" },
+      { nodeId: "other", parentId: null, label: "Other", sourceRow: 2, sourceKey: "identity:other" }
+    ]);
+
+    expect(graph.nodes.get("same")?.sourceKey).toBe("identity:first");
+    expect(graph.nodes.get("same")?.sourceRow).toBe(0);
+    expect(graph.nodes.get("same")?.parentId).toBeNull();
+    expect(graph.diagnostics.find((item) => item.code === "conflicting-duplicate")?.nodeIds).toEqual(["same"]);
+  });
+
   test("keeps orphan and empty-label components while excluding empty identities", () => {
     const graph = buildHierarchy([
       { nodeId: "orphan", parentId: "missing", label: "Orphan" },
@@ -131,5 +144,39 @@ describe("buildHierarchy", () => {
     });
     expect(formatted.points.get("root")?.width).toBe(96);
     expect(formatted.points.get("root")?.height).toBe(32);
+  });
+
+  test("centers parents over wide child groups and keeps deep layouts deterministic", () => {
+    const rows = [
+      { nodeId: "root", parentId: null, label: "Root" },
+      { nodeId: "left", parentId: "root", label: "Left" },
+      { nodeId: "right", parentId: "root", label: "Right" },
+      { nodeId: "deep-1", parentId: "left", label: "Deep 1" },
+      { nodeId: "deep-2", parentId: "deep-1", label: "Deep 2" }
+    ];
+    const graph = buildHierarchy(rows);
+    const ids = flattenVisibleIds(graph, new Set());
+    const first = computeLayout(graph, ids, { width: 320, height: 180 });
+    const second = computeLayout(graph, ids, { width: 320, height: 180 });
+    const root = first.points.get("root")!;
+    const left = first.points.get("left")!;
+    const right = first.points.get("right")!;
+
+    expect(root.y + root.height / 2).toBeCloseTo((left.y + right.y + right.height) / 2);
+    expect(first).toEqual(second);
+    expect(first.width).toBeGreaterThan(320);
+  });
+
+  test("keeps a bounded model for wide input", () => {
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      nodeId: `node-${index}`,
+      parentId: null,
+      label: `Node ${index}`
+    }));
+    const graph = buildHierarchy(rows, { nodeCap: 5 });
+
+    expect(graph.nodes.size).toBe(5);
+    expect(graph.excludedCount).toBe(15);
+    expect(graph.diagnostics.map((item) => item.code)).toContain("node-cap");
   });
 });

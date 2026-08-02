@@ -33,6 +33,10 @@ export interface LocalizedStrings {
   boundedContract: string;
   tableMode: string;
   matrixMode: string;
+  loading: string;
+  partial: string;
+  rendered: string;
+  renderCap: string;
 }
 
 const ENGLISH: LocalizedStrings = {
@@ -69,7 +73,11 @@ const ENGLISH: LocalizedStrings = {
   matrixUnsupported: "Matrix mode is not enabled. Use the table NodeId, ParentId, and Label roles.",
   boundedContract: "bounded table contract active",
   tableMode: "Table mode",
-  matrixMode: "Matrix mode"
+  matrixMode: "Matrix mode",
+  loading: "loading more data",
+  partial: "partial data",
+  rendered: "rendered",
+  renderCap: "The visible hierarchy is capped for responsiveness; collapse or search to reach additional nodes."
 };
 
 const TRANSLATIONS: Record<string, Partial<LocalizedStrings>> = {

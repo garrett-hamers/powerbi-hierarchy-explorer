@@ -1,5 +1,7 @@
 export type DiagnosticCode =
   | "missing-required-fields"
+  | "invalid-cardinality"
+  | "invalid-data-shape"
   | "empty-id"
   | "empty-label"
   | "duplicate-id"
@@ -9,8 +11,10 @@ export type DiagnosticCode =
   | "cycle"
   | "multiple-roots"
   | "data-reduction"
+  | "partial-data"
   | "node-cap"
-  | "depth-cap";
+  | "depth-cap"
+  | "render-cap";
 
 export type DiagnosticSeverity = "info" | "warning" | "error";
 
@@ -31,6 +35,7 @@ export interface HierarchyRow {
   value?: unknown;
   tooltips?: Record<string, unknown>;
   sourceRow?: number;
+  sourceKey?: string;
 }
 
 export interface GraphInput {
@@ -39,6 +44,7 @@ export interface GraphInput {
   truncated?: boolean;
   boundedContract?: boolean;
   rolesPresent?: Partial<Record<"NodeId" | "ParentId" | "Label", boolean>>;
+  inputDiagnostics?: readonly Diagnostic[];
 }
 
 export interface GraphOptions {
@@ -57,6 +63,7 @@ export interface HierarchyNode {
   children: string[];
   depth: number;
   sourceRow: number;
+  sourceKey: string;
   qualityFlags: DiagnosticCode[];
 }
 
@@ -150,8 +157,44 @@ function addQualityFlag(
   quality.set(id, flags);
 }
 
+function compareIds(left: string, right: string): number {
+  const leftParts = left.match(/\d+|\D+/g) ?? [left];
+  const rightParts = right.match(/\d+|\D+/g) ?? [right];
+  const partCount = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < partCount; index += 1) {
+    const leftPart = leftParts[index];
+    const rightPart = rightParts[index];
+    if (leftPart === undefined) {
+      return -1;
+    }
+    if (rightPart === undefined) {
+      return 1;
+    }
+    const leftIsNumeric = /^\d+$/.test(leftPart);
+    const rightIsNumeric = /^\d+$/.test(rightPart);
+    if (leftIsNumeric && rightIsNumeric) {
+      const leftNormalized = leftPart.replace(/^0+(?=\d)/, "");
+      const rightNormalized = rightPart.replace(/^0+(?=\d)/, "");
+      if (leftNormalized.length !== rightNormalized.length) {
+        return leftNormalized.length - rightNormalized.length;
+      }
+      if (leftNormalized !== rightNormalized) {
+        return leftNormalized < rightNormalized ? -1 : 1;
+      }
+      if (leftPart.length !== rightPart.length) {
+        return leftPart.length - rightPart.length;
+      }
+      continue;
+    }
+    if (leftPart !== rightPart) {
+      return leftPart < rightPart ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 function sortIds(ids: Iterable<string>): string[] {
-  return Array.from(ids).sort((left, right) => left.localeCompare(right, "en", { numeric: true }));
+  return Array.from(ids).sort(compareIds);
 }
 
 /**
@@ -168,7 +211,7 @@ export function buildHierarchy(
   const rows = normalizedInput.rows;
   const nodeCap = Math.max(1, options.nodeCap ?? DEFAULT_NODE_CAP);
   const depthCap = Math.max(0, options.depthCap ?? DEFAULT_DEPTH_CAP);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [...(normalizedInput.inputDiagnostics ?? [])];
   const quality = new Map<string, Set<DiagnosticCode>>();
   const records = new Map<string, HierarchyRow>();
   const duplicateIds = new Set<string>();
@@ -205,7 +248,11 @@ export function buildHierarchy(
       }
       return;
     }
-    records.set(id, { ...row, sourceRow: row.sourceRow ?? index });
+    records.set(id, {
+      ...row,
+      sourceRow: row.sourceRow ?? index,
+      sourceKey: row.sourceKey ?? `row:${index}`
+    });
     if (!text(row.label).trim()) {
       emptyLabels.push(id);
       addQualityFlag(quality, id, "empty-label");
@@ -354,8 +401,8 @@ export function buildHierarchy(
   const depthById = new Map<string, number>();
   const roots = sortIds(cappedIds.filter((id) => !includedParentById.get(id)));
   const queue = roots.map((id) => ({ id, depth: 0 }));
-  while (queue.length > 0) {
-    const item = queue.shift()!;
+  for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+    const item = queue[queueIndex];
     if (depthById.has(item.id)) {
       continue;
     }
@@ -397,6 +444,7 @@ export function buildHierarchy(
       children: [],
       depth: depthById.get(id) ?? 0,
       sourceRow: row.sourceRow ?? 0,
+      sourceKey: row.sourceKey ?? `row:${row.sourceRow ?? 0}`,
       qualityFlags: sortIds(flags) as DiagnosticCode[]
     });
   });
@@ -405,12 +453,12 @@ export function buildHierarchy(
       nodes.get(node.parentId)!.children.push(node.id);
     }
   });
-  nodes.forEach((node) => node.children.sort((left, right) => left.localeCompare(right, "en", { numeric: true })));
+  nodes.forEach((node) => node.children.sort(compareIds));
   const finalRoots = sortIds(Array.from(nodes.values()).filter((node) => !node.parentId).map((node) => node.id));
   const finalDepthById = new Map<string, number>();
   const depthQueue = finalRoots.map((id) => ({ id, depth: 0 }));
-  while (depthQueue.length > 0) {
-    const item = depthQueue.shift()!;
+  for (let queueIndex = 0; queueIndex < depthQueue.length; queueIndex += 1) {
+    const item = depthQueue[queueIndex];
     if (finalDepthById.has(item.id)) {
       continue;
     }
@@ -431,9 +479,8 @@ export function buildHierarchy(
     maxDepth = Math.max(maxDepth, node.depth);
   });
   const receivedCount = normalizedInput.receivedCount ?? rows.length;
-  const truncated =
-    normalizedInput.truncated === true || receivedCount > rows.length || rows.length >= TABLE_ROW_CAP;
-  const boundedContract = normalizedInput.boundedContract === true || truncated;
+  const truncated = normalizedInput.truncated === true || receivedCount > rows.length;
+  const boundedContract = normalizedInput.boundedContract === true;
   if (truncated) {
     diagnostics.push(
       diagnostic(
@@ -464,8 +511,8 @@ export function buildHierarchy(
 export function getDescendantIds(graph: GraphModel, id: string, includeSelf = false): string[] {
   const result: string[] = includeSelf && graph.nodes.has(id) ? [id] : [];
   const queue = [...(graph.nodes.get(id)?.children ?? [])];
-  while (queue.length > 0) {
-    const child = queue.shift()!;
+  for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+    const child = queue[queueIndex];
     result.push(child);
     queue.push(...(graph.nodes.get(child)?.children ?? []));
   }

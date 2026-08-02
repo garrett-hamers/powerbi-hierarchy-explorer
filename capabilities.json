@@ -1,10 +1,8 @@
 {
   "privileges": [],
   "supportsKeyboardFocus": true,
-  "supportsLandingPage": true,
   "supportsEmptyDataView": true,
   "supportsMultiVisualSelection": true,
-  "keepAllMetadataColumns": true,
   "tooltips": {
     "roles": [
       "Tooltips"
@@ -27,37 +25,82 @@
       "displayName": "Node ID",
       "displayNameKey": "Role_NodeId",
       "name": "NodeId",
-      "kind": "Grouping"
+      "kind": "Grouping",
+      "requiredTypes": [
+        {
+          "text": true
+        },
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Parent ID",
       "displayNameKey": "Role_ParentId",
       "name": "ParentId",
-      "kind": "Grouping"
+      "kind": "Grouping",
+      "requiredTypes": [
+        {
+          "text": true
+        },
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Label",
       "displayNameKey": "Role_Label",
       "name": "Label",
-      "kind": "Grouping"
+      "kind": "Grouping",
+      "requiredTypes": [
+        {
+          "text": true
+        },
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Subtitle",
       "displayNameKey": "Role_Subtitle",
       "name": "Subtitle",
-      "kind": "Grouping"
+      "kind": "Grouping",
+      "requiredTypes": [
+        {
+          "text": true
+        },
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Category",
       "displayNameKey": "Role_Category",
       "name": "Category",
-      "kind": "Grouping"
+      "kind": "Grouping",
+      "requiredTypes": [
+        {
+          "text": true
+        },
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Value",
       "displayNameKey": "Role_Value",
       "name": "Value",
-      "kind": "Measure"
+      "kind": "Measure",
+      "requiredTypes": [
+        {
+          "numeric": true
+        }
+      ]
     },
     {
       "displayName": "Tooltips",
@@ -107,8 +150,41 @@
               }
             }
           ]
+        },
+        "dataReductionAlgorithm": {
+          "window": {
+            "count": 30000
+          }
         }
-      }
+      },
+      "conditions": [
+        {
+          "NodeId": {
+            "min": 1,
+            "max": 1
+          },
+          "ParentId": {
+            "min": 1,
+            "max": 1
+          },
+          "Label": {
+            "min": 1,
+            "max": 1
+          },
+          "Subtitle": {
+            "max": 1
+          },
+          "Category": {
+            "max": 1
+          },
+          "Value": {
+            "max": 1
+          },
+          "Tooltips": {
+            "max": 10
+          }
+        }
+      ]
     }
   ],
   "objects": {
@@ -165,6 +241,18 @@
           "displayNameKey": "Format_Padding",
           "type": {
             "numeric": true
+          }
+        },
+        "zoom": {
+          "displayNameKey": "Format_Zoom",
+          "type": {
+            "numeric": true
+          }
+        },
+        "fitContent": {
+          "displayNameKey": "Format_FitContent",
+          "type": {
+            "bool": true
           }
         }
       }
@@ -238,9 +326,7 @@
         "fontSize": {
           "displayNameKey": "Format_FontSize",
           "type": {
-            "formatting": {
-              "fontSize": true
-            }
+            "numeric": true
           }
         },
         "subtitleFontSize": {

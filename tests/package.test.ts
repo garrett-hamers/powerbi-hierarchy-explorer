@@ -20,9 +20,34 @@ describe("certification-first package contract", () => {
       expect.arrayContaining(["NodeId", "ParentId", "Label", "Subtitle", "Category", "Value", "Tooltips"])
     );
     expect(capabilities.dataViewMappings[0].table.rows.select).toHaveLength(7);
+    expect(capabilities.dataViewMappings[0].conditions[0]).toMatchObject({
+      NodeId: { min: 1, max: 1 },
+      ParentId: { min: 1, max: 1 },
+      Label: { min: 1, max: 1 },
+      Tooltips: { max: 10 }
+    });
+    expect(capabilities.dataViewMappings[0].table.dataReductionAlgorithm.window.count).toBe(30000);
+    expect(capabilities.dataRoles.find((role: { name: string }) => role.name === "NodeId").requiredTypes)
+      .toEqual(expect.arrayContaining([{ text: true }, { numeric: true }]));
+    expect(capabilities).not.toHaveProperty("supportsLandingPage");
+    expect(capabilities).not.toHaveProperty("keepAllMetadataColumns");
     expect(capabilities.objects.layout.properties.direction.displayNameKey).toBe("Format_Direction");
     expect(resources.UI_BoundedContract).toBe("bounded table contract active");
     expect(resources["Diagnostic_conflicting-duplicate"]).toContain("never selectable");
+  });
+
+  test("includes release metadata and direct certification tooling", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    expect(fs.existsSync(path.join(root, "LICENSE"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "CHANGELOG.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "SECURITY.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "CONTRIBUTING.md"))).toBe(true);
+    expect(packageJson.scripts.eslint).toBe("npx eslint . --ext .js,.jsx,.ts,.tsx");
+    expect(packageJson.scripts.audit).toBe("npm audit");
+    expect(packageJson.devDependencies["eslint-plugin-powerbi-visuals"]).toBe("1.1.1");
+    expect(packageJson.dependencies["powerbi-visuals-api"]).toBe("5.11.0");
+    expect(packageJson.devDependencies["powerbi-visuals-tools"]).toBe("7.2.1");
+    expect(packageJson.overrides.uuid).toBe("11.1.1");
   });
 
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {
