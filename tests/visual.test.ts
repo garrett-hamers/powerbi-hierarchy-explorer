@@ -1,24 +1,60 @@
 import { Visual } from "../src/visual";
 
-function makeHost() {
+interface HostHarness {
+  host: Record<string, unknown>;
+  selectionManager: {
+    select: jest.Mock;
+    clear: jest.Mock;
+    showContextMenu: jest.Mock;
+  };
+  selectionIds: Array<{ key: string }>;
+}
+
+interface SelectionBuilder {
+  withTable: jest.Mock;
+  createSelectionId: jest.Mock;
+}
+
+function makeHost(locale = "en-US", highContrast = false): HostHarness {
+  const selectionIds: Array<{ key: string }> = [];
   const selectionManager = {
     select: jest.fn().mockResolvedValue(undefined),
-    clear: jest.fn().mockResolvedValue(undefined)
+    clear: jest.fn().mockResolvedValue(undefined),
+    showContextMenu: jest.fn().mockResolvedValue(undefined),
+    registerOnSelectCallback: jest.fn()
   };
   const host = {
-    locale: "en-US",
-    colorPalette: { isHighContrast: false },
+    locale,
+    colorPalette: {
+      isHighContrast: highContrast,
+      foreground: { value: "#f0f0f0" },
+      background: { value: "#101010" },
+      foregroundSelected: { value: "#00ff00" }
+    },
     createSelectionManager: jest.fn(() => selectionManager),
-    createSelectionIdBuilder: jest.fn(() => ({
-      withTable: jest.fn().mockReturnThis(),
-      createSelectionId: jest.fn(() => ({ key: "node-row" }))
+    createSelectionIdBuilder: jest.fn(() => {
+      let rowIndex: number | undefined;
+      const builder: SelectionBuilder = {
+        withTable: jest.fn(),
+        createSelectionId: jest.fn()
+      };
+      builder.withTable.mockImplementation((_table: unknown, index: number) => {
+          rowIndex = index;
+          return builder;
+        });
+      builder.createSelectionId.mockImplementation(() => {
+        const selectionId = { key: rowIndex === undefined ? "empty" : `row-${rowIndex}` };
+        selectionIds.push(selectionId);
+        return selectionId;
+      });
+      return builder;
+    }),
+    createLocalizationManager: jest.fn(() => ({
+      getDisplayName: jest.fn((key: string) => (locale.startsWith("ar") && key === "UI_Search" ? "بحث" : key))
     })),
     tooltipService: {
       show: jest.fn().mockResolvedValue(undefined),
       hide: jest.fn().mockResolvedValue(undefined)
-    },
-    contextMenuService: {
-      show: jest.fn().mockResolvedValue(undefined)
     },
     eventService: {
       renderingStarted: jest.fn(),
@@ -26,10 +62,14 @@ function makeHost() {
       renderingFailed: jest.fn()
     }
   };
-  return { host, selectionManager };
+  return { host, selectionManager, selectionIds };
 }
 
-function tableDataView() {
+function tableDataView(rows = [
+  ["a", null, "A", "Root", "first"],
+  ["b", "a", "B", "Child", "second"],
+  ["c", "a", "C", "Child", "third"]
+]) {
   return {
     table: {
       columns: [
@@ -39,58 +79,167 @@ function tableDataView() {
         { displayName: "Role", roles: { Subtitle: true } },
         { displayName: "Details", roles: { Tooltips: true } }
       ],
-      rows: [
-        ["a", null, "A", "Root", "first"],
-        ["b", "a", "B", "Child", "second"],
-        ["c", "a", "C", "Child", "third"]
-      ]
+      rows
     }
   };
 }
 
+function updateVisual(
+  host: Record<string, unknown>,
+  dataView: Record<string, unknown>,
+  viewport = { width: 400, height: 300 }
+) {
+  const element = document.createElement("div");
+  const visual = new Visual({ element, host } as any);
+  visual.update({ dataViews: [dataView], viewport } as any);
+  return { element, visual };
+}
+
 describe("Visual interactions and lifecycle", () => {
-  test("renders diagnostics, semantic tree, search, selection, tooltip, and context menu", () => {
+  test("uses one semantic tree and documented selection/context-menu contracts", () => {
     const { host, selectionManager } = makeHost();
-    const element = document.createElement("div");
-    const visual = new Visual({ element, host } as any);
-    visual.update({ dataViews: [tableDataView()], viewport: { width: 400, height: 300 } } as any);
+    const { element, visual } = updateVisual(host, tableDataView());
 
-    expect(element.querySelector('[role="tree"]')).not.toBeNull();
-    expect(element.querySelectorAll('[role="treeitem"]').length).toBeGreaterThanOrEqual(3);
-    expect(host.eventService.renderingStarted).toHaveBeenCalled();
-    expect(host.eventService.renderingFinished).toHaveBeenCalled();
+    expect(element.querySelectorAll('[role="tree"]').length).toBe(1);
+    expect(element.querySelector('[role="tree"]')?.getAttribute("aria-label")).toBe("Hierarchy tree");
+    expect(element.querySelector(".atlyn-graph")?.getAttribute("aria-hidden")).toBe("true");
+    expect(element.querySelectorAll('[role="treeitem"]').length).toBe(3);
+    expect((host.eventService as any).renderingStarted).toHaveBeenCalled();
+    expect((host.eventService as any).renderingFinished).toHaveBeenCalled();
 
-    const label = Array.from(element.querySelectorAll(".atlyn-semantic-label")).find(
-      (item) => item.textContent?.startsWith("B")
-    ) as HTMLButtonElement;
-    label.click();
-    expect(selectionManager.select).toHaveBeenCalled();
-
-    const search = element.querySelector(".atlyn-search") as HTMLInputElement;
-    search.value = "C";
-    search.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(element.querySelector('[data-node-id="c"]')).not.toBeNull();
+    const child = element.querySelector('[data-semantic-node-id="b"]') as HTMLElement;
+    child.click();
+    expect(selectionManager.select).toHaveBeenCalledWith({ key: "row-1" }, false);
 
     const node = element.querySelector('[data-node-id="a"]') as Element;
     node.dispatchEvent(new MouseEvent("mouseenter", { clientX: 10, clientY: 20 }));
+    expect((host.tooltipService as any).show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identities: [{ key: "row-0" }],
+        dataItems: expect.arrayContaining([
+          expect.objectContaining({ displayName: "Retained table row", value: "1" })
+        ])
+      })
+    );
+
     node.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 20 }));
-    expect(host.tooltipService.show).toHaveBeenCalled();
-    expect(host.contextMenuService.show).toHaveBeenCalled();
+    expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "row-0" }, { x: 10, y: 20 });
+
+    const canvas = element.querySelector(".atlyn-canvas-wrap") as Element;
+    canvas.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 30, clientY: 40 }));
+    expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "empty" }, { x: 30, y: 40 });
+
+    child.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 50, clientY: 60 }));
+    expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "row-1" }, { x: 50, y: 60 });
+    visual.destroy();
   });
 
-  test("supports collapse and keyboard tree navigation and cleans up", () => {
+  test("retains first duplicate row identity and never selects a conflicting row", () => {
+    const { host, selectionManager } = makeHost();
+    const { element, visual } = updateVisual(
+      host,
+      tableDataView([
+        ["same", null, "First", "retained", "first tooltip"],
+        ["same", "other", "Later", "conflict", "conflicting tooltip"],
+        ["other", null, "Other", "", "other tooltip"]
+      ])
+    );
+
+    const retained = element.querySelector('[data-semantic-node-id="same"]') as HTMLElement;
+    expect(retained.textContent).toContain("First");
+    expect(element.textContent).toContain("Conflicting duplicate NodeId rows are never selectable");
+    retained.click();
+    expect(selectionManager.select).toHaveBeenCalledWith({ key: "row-0" }, false);
+    expect(selectionManager.select).not.toHaveBeenCalledWith({ key: "row-1" }, expect.anything());
+
+    const svgNode = element.querySelector('[data-node-id="same"]') as Element;
+    svgNode.dispatchEvent(new MouseEvent("mouseenter", { clientX: 1, clientY: 2 }));
+    expect((host.tooltipService as any).show).toHaveBeenLastCalledWith(
+      expect.objectContaining({ identities: [{ key: "row-0" }] })
+    );
+    visual.destroy();
+  });
+
+  test("supports collapse, keyboard tree navigation, and cleanup", () => {
     const { host } = makeHost();
-    const element = document.createElement("div");
-    const visual = new Visual({ element, host } as any);
-    visual.update({ dataViews: [tableDataView()], viewport: { width: 400, height: 300 } } as any);
+    const { element, visual } = updateVisual(host, tableDataView());
 
     const toggle = element.querySelector(".atlyn-semantic-toggle") as HTMLButtonElement;
     toggle.click();
-    expect(element.querySelectorAll('[role="treeitem"]').length).toBe(2);
+    expect(element.querySelectorAll('[role="treeitem"]').length).toBe(1);
+    expect(element.querySelector('[data-semantic-node-id="a"]')?.getAttribute("aria-expanded")).toBe("false");
+
     const rootItem = element.querySelector('[data-semantic-node-id="a"]') as HTMLElement;
     rootItem.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    rootItem.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(element.querySelectorAll('[role="treeitem"]').length).toBe(3);
+    const expandedRoot = element.querySelector('[data-semantic-node-id="a"]') as HTMLElement;
+    expandedRoot.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(element.querySelector('[data-semantic-node-id="b"]')?.getAttribute("tabindex")).toBe("0");
+    expandedRoot.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
     visual.destroy();
     expect(element.querySelector(".atlyn-root")).toBeNull();
+    expect((host.eventService as any).renderingFailed).not.toHaveBeenCalled();
+  });
+
+  test("localizes, mirrors RTL geometry, and uses the host high-contrast palette", () => {
+    const { host } = makeHost("ar-SA", true);
+    const { element, visual } = updateVisual(host, tableDataView());
+
+    const root = element.querySelector(".atlyn-root") as HTMLElement;
+    expect(root.dir).toBe("rtl");
+    expect(root.dataset.highContrast).toBe("true");
+    expect(root.style.getPropertyValue("--atlyn-background")).toBe("#101010");
+    expect(root.style.getPropertyValue("--atlyn-selected")).toBe("#00ff00");
+    expect(element.querySelector(".atlyn-search")?.getAttribute("aria-label")).toBe("بحث");
+    expect(element.querySelector(".atlyn-node-label")?.getAttribute("text-anchor")).toBe("end");
+    visual.destroy();
+  });
+
+  test("shows bounded segment diagnostics and handles empty, partial, and matrix data", () => {
+    const { host } = makeHost();
+    const segmented = tableDataView();
+    (segmented as any).metadata = { segment: { objects: [] } };
+    const segmentedResult = updateVisual(host, segmented);
+    expect(segmentedResult.element.textContent).toContain("bounded contract");
+    segmentedResult.visual.destroy();
+
+    const partial = {
+      table: {
+        columns: [
+          { displayName: "Node", roles: { NodeId: true } },
+          { displayName: "Label", roles: { Label: true } }
+        ],
+        rows: [["a", "A"]]
+      }
+    };
+    const partialResult = updateVisual(host, partial);
+    expect(partialResult.element.textContent).toContain("Required field(s) missing: ParentId");
+    partialResult.visual.destroy();
+
+    const emptyResult = updateVisual(host, {} as Record<string, unknown>);
+    expect(emptyResult.element.querySelector(".atlyn-empty")?.textContent).toContain("Add NodeId");
+    emptyResult.visual.destroy();
+
+    const matrixResult = updateVisual(host, { matrix: { rows: [] } });
+    expect(matrixResult.element.textContent).toContain("Matrix mode is not enabled");
+    matrixResult.visual.destroy();
+  });
+
+  test("opens context menus from touch long press", () => {
+    jest.useFakeTimers();
+    try {
+      const { host, selectionManager } = makeHost();
+      const { element, visual } = updateVisual(host, tableDataView());
+      const node = element.querySelector('[data-node-id="a"]') as Element;
+      const start = new Event("touchstart", { bubbles: true });
+      Object.defineProperty(start, "touches", { value: [{ clientX: 7, clientY: 8 }] });
+      node.dispatchEvent(start);
+      jest.advanceTimersByTime(550);
+      expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "row-0" }, { x: 7, y: 8 });
+      visual.destroy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

@@ -35,8 +35,8 @@ export function computeLayout(
   visibleIds: readonly string[],
   options: LayoutOptions
 ): LayoutResult {
-  const nodeWidth = Math.max(112, options.nodeWidth ?? 156);
-  const nodeHeight = Math.max(38, options.nodeHeight ?? 48);
+  const nodeWidth = Math.max(96, options.nodeWidth ?? 156);
+  const nodeHeight = Math.max(32, options.nodeHeight ?? 48);
   const horizontalGap = Math.max(12, options.horizontalGap ?? 38);
   const verticalGap = Math.max(8, options.verticalGap ?? 14);
   const padding = Math.max(4, options.padding ?? 12);

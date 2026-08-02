@@ -1,7 +1,6 @@
 {
   "privileges": [],
   "supportsKeyboardFocus": true,
-  "supportsHighlight": true,
   "supportsLandingPage": true,
   "supportsEmptyDataView": true,
   "supportsMultiVisualSelection": true,
@@ -26,36 +25,43 @@
   "dataRoles": [
     {
       "displayName": "Node ID",
+      "displayNameKey": "Role_NodeId",
       "name": "NodeId",
       "kind": "Grouping"
     },
     {
       "displayName": "Parent ID",
+      "displayNameKey": "Role_ParentId",
       "name": "ParentId",
       "kind": "Grouping"
     },
     {
       "displayName": "Label",
+      "displayNameKey": "Role_Label",
       "name": "Label",
       "kind": "Grouping"
     },
     {
       "displayName": "Subtitle",
+      "displayNameKey": "Role_Subtitle",
       "name": "Subtitle",
       "kind": "Grouping"
     },
     {
       "displayName": "Category",
+      "displayNameKey": "Role_Category",
       "name": "Category",
       "kind": "Grouping"
     },
     {
       "displayName": "Value",
+      "displayNameKey": "Role_Value",
       "name": "Value",
       "kind": "Measure"
     },
     {
       "displayName": "Tooltips",
+      "displayNameKey": "Role_Tooltips",
       "name": "Tooltips",
       "kind": "GroupingOrMeasure"
     }
@@ -105,5 +111,206 @@
       }
     }
   ],
-  "objects": {}
+  "objects": {
+    "layout": {
+      "displayNameKey": "Format_Layout_Card",
+      "properties": {
+        "direction": {
+          "displayNameKey": "Format_Direction",
+          "type": {
+            "enumeration": [
+              {
+                "displayName": "Automatic",
+                "displayNameKey": "Format_Direction_Auto",
+                "value": "auto"
+              },
+              {
+                "displayName": "Left to right",
+                "displayNameKey": "Format_Direction_Ltr",
+                "value": "ltr"
+              },
+              {
+                "displayName": "Right to left",
+                "displayNameKey": "Format_Direction_Rtl",
+                "value": "rtl"
+              }
+            ]
+          }
+        },
+        "nodeWidth": {
+          "displayNameKey": "Format_NodeWidth",
+          "type": {
+            "numeric": true
+          }
+        },
+        "nodeHeight": {
+          "displayNameKey": "Format_NodeHeight",
+          "type": {
+            "numeric": true
+          }
+        },
+        "horizontalGap": {
+          "displayNameKey": "Format_HorizontalGap",
+          "type": {
+            "numeric": true
+          }
+        },
+        "verticalGap": {
+          "displayNameKey": "Format_VerticalGap",
+          "type": {
+            "numeric": true
+          }
+        },
+        "padding": {
+          "displayNameKey": "Format_Padding",
+          "type": {
+            "numeric": true
+          }
+        }
+      }
+    },
+    "colors": {
+      "displayNameKey": "Format_Colors_Card",
+      "properties": {
+        "backgroundColor": {
+          "displayNameKey": "Format_Background",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "nodeColor": {
+          "displayNameKey": "Format_NodeFill",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "selectedColor": {
+          "displayNameKey": "Format_Selected",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "typography": {
+      "displayNameKey": "Format_Typography_Card",
+      "properties": {
+        "labelColor": {
+          "displayNameKey": "Format_LabelColor",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "subtitleColor": {
+          "displayNameKey": "Format_SubtitleColor",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "fontFamily": {
+          "displayNameKey": "Format_FontFamily",
+          "type": {
+            "formatting": {
+              "fontFamily": true
+            }
+          }
+        },
+        "fontSize": {
+          "displayNameKey": "Format_FontSize",
+          "type": {
+            "formatting": {
+              "fontSize": true
+            }
+          }
+        },
+        "subtitleFontSize": {
+          "displayNameKey": "Format_SubtitleSize",
+          "type": {
+            "numeric": true
+          }
+        }
+      }
+    },
+    "edges": {
+      "displayNameKey": "Format_Edges_Card",
+      "properties": {
+        "edgeColor": {
+          "displayNameKey": "Format_EdgeColor",
+          "type": {
+            "fill": {
+              "solid": {
+                "color": true
+              }
+            }
+          }
+        },
+        "edgeWidth": {
+          "displayNameKey": "Format_EdgeWidth",
+          "type": {
+            "numeric": true
+          }
+        }
+      }
+    },
+    "interaction": {
+      "displayNameKey": "Format_Interaction_Card",
+      "properties": {
+        "enableSearch": {
+          "displayNameKey": "Format_EnableSearch",
+          "type": {
+            "bool": true
+          }
+        },
+        "enableCollapse": {
+          "displayNameKey": "Format_EnableCollapse",
+          "type": {
+            "bool": true
+          }
+        },
+        "enableDescendantSelection": {
+          "displayNameKey": "Format_EnableDescendants",
+          "type": {
+            "bool": true
+          }
+        },
+        "reducedMotion": {
+          "displayNameKey": "Format_ReducedMotion",
+          "type": {
+            "bool": true
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "displayNameKey": "Format_Diagnostics_Card",
+      "properties": {
+        "showDiagnostics": {
+          "displayNameKey": "Format_ShowDiagnostics",
+          "type": {
+            "bool": true
+          }
+        }
+      }
+    }
+  }
 }

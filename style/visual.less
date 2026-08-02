@@ -3,9 +3,18 @@
   --atlyn-foreground: #242424;
   --atlyn-muted: #5f6368;
   --atlyn-accent: #2764c4;
+  --atlyn-selected: #2764c4;
   --atlyn-border: #d9dce1;
   --atlyn-warning: #8a4b00;
   --atlyn-error: #b42318;
+  --atlyn-node-fill: #ffffff;
+  --atlyn-label: #242424;
+  --atlyn-subtitle: #5f6368;
+  --atlyn-edge: #d9dce1;
+  --atlyn-font-family: Arial, sans-serif;
+  --atlyn-label-size: 12px;
+  --atlyn-subtitle-size: 10px;
+  --atlyn-edge-width: 1.5;
 }
 
 .atlyn-root {
@@ -14,7 +23,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  font-family: Arial, sans-serif;
+  font-family: var(--atlyn-font-family);
   font-size: 13px;
   height: 100%;
   min-height: 96px;
@@ -44,6 +53,7 @@
 }
 
 .atlyn-search {
+  background: var(--atlyn-background);
   border: 1px solid var(--atlyn-border);
   border-radius: 3px;
   color: inherit;
@@ -114,6 +124,7 @@
   min-height: 0;
   overflow: auto;
   position: relative;
+  touch-action: pan-y;
 }
 
 .atlyn-graph {
@@ -123,22 +134,19 @@
 }
 
 .atlyn-edge {
-  stroke: var(--atlyn-border);
-  stroke-width: 1.5;
+  stroke: var(--atlyn-edge);
+  stroke-width: var(--atlyn-edge-width);
 }
 
 .atlyn-node-card {
-  fill: var(--atlyn-background);
+  fill: var(--atlyn-node-fill);
   stroke: var(--atlyn-accent);
-  stroke-width: 1.5;
+  stroke-width: var(--atlyn-edge-width);
 }
 
 .atlyn-node-card[data-selected="true"] {
-  stroke-width: 3;
-}
-
-.atlyn-node-card[data-highlighted="true"] {
-  stroke: var(--atlyn-warning);
+  stroke: var(--atlyn-selected);
+  stroke-width: max(2px, calc(var(--atlyn-edge-width) + 1px));
 }
 
 .atlyn-node-card[data-search-match="true"] {
@@ -146,14 +154,14 @@
 }
 
 .atlyn-node-label {
-  fill: var(--atlyn-foreground);
-  font-size: 12px;
+  fill: var(--atlyn-label);
+  font-size: var(--atlyn-label-size);
   pointer-events: none;
 }
 
 .atlyn-node-subtitle {
-  fill: var(--atlyn-muted);
-  font-size: 10px;
+  fill: var(--atlyn-subtitle);
+  font-size: var(--atlyn-subtitle-size);
   pointer-events: none;
 }
 
@@ -178,9 +186,8 @@
 
 .atlyn-semantic-label {
   background: transparent;
-  border: 0;
   color: inherit;
-  cursor: pointer;
+  display: block;
   overflow: hidden;
   padding: 3px;
   text-align: start;
@@ -196,6 +203,11 @@
   min-width: 24px;
 }
 
+.atlyn-semantic-item {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .atlyn-empty {
   color: var(--atlyn-muted);
   padding: 20px 8px;
@@ -203,13 +215,23 @@
 }
 
 .atlyn-root[data-high-contrast="true"] {
-  --atlyn-background: #000000;
-  --atlyn-foreground: #ffffff;
-  --atlyn-muted: #ffffff;
-  --atlyn-accent: #ffff00;
-  --atlyn-border: #ffffff;
-  --atlyn-warning: #ffff00;
-  --atlyn-error: #ff8080;
+  --atlyn-warning: var(--atlyn-foreground);
+  --atlyn-error: var(--atlyn-foreground);
+}
+
+.atlyn-root[data-high-contrast="true"] .atlyn-node-card[data-search-match="true"] {
+  fill: var(--atlyn-background);
+  stroke: var(--atlyn-foreground);
+}
+
+.atlyn-root[data-high-contrast="true"] .atlyn-semantic-item[aria-selected="true"] {
+  background: var(--atlyn-background);
+  outline: 1px solid var(--atlyn-foreground);
+}
+
+.atlyn-root[data-reduced-motion="true"] * {
+  scroll-behavior: auto !important;
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

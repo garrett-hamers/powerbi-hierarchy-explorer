@@ -25,14 +25,16 @@ describe("buildHierarchy", () => {
 
   test("uses NodeId identity and diagnoses duplicate and conflicting rows", () => {
     const graph = buildHierarchy([
-      { nodeId: "same", parentId: null, label: "First" },
-      { nodeId: "same", parentId: null, label: "First" },
-      { nodeId: "same", parentId: "other", label: "Conflicting" },
+      { nodeId: "same", parentId: null, label: "First", sourceRow: 10 },
+      { nodeId: "same", parentId: null, label: "First", sourceRow: 11 },
+      { nodeId: "same", parentId: "other", label: "Conflicting", sourceRow: 12 },
       { nodeId: "other", parentId: null, label: "Other" }
     ]);
 
     expect(graph.nodes.size).toBe(2);
     expect(graph.nodes.get("same")?.label).toBe("First");
+    expect(graph.nodes.get("same")?.sourceRow).toBe(10);
+    expect(graph.nodes.get("same")?.parentId).toBeNull();
     expect(graph.diagnostics.map((item) => item.code)).toEqual(
       expect.arrayContaining(["duplicate-id", "conflicting-duplicate"])
     );
@@ -91,6 +93,20 @@ describe("buildHierarchy", () => {
       expect.arrayContaining(["missing-required-fields", "data-reduction", "node-cap", "depth-cap"])
     );
     expect(graph.excludedCount).toBeGreaterThan(0);
+    expect(graph.nodes.get("b")).toBeUndefined();
+  });
+
+  test("recomputes depth after capped ancestors are promoted to roots", () => {
+    const graph = buildHierarchy(
+      [
+        { nodeId: "z-root", parentId: null, label: "Root" },
+        { nodeId: "a-child", parentId: "z-root", label: "Child" }
+      ],
+      { nodeCap: 1 }
+    );
+
+    expect(graph.roots).toEqual(["a-child"]);
+    expect(graph.nodes.get("a-child")?.depth).toBe(0);
   });
 
   test("layout is bounded, stable, and mirrors in RTL", () => {
@@ -106,5 +122,14 @@ describe("buildHierarchy", () => {
     expect(rtl.points.get("root")?.x).toBeGreaterThan(rtl.points.get("child")?.x ?? 0);
     expect(ltr.width).toBeGreaterThanOrEqual(220);
     expect(ltr.height).toBeGreaterThanOrEqual(120);
+    const formatted = computeLayout(graph, ids, {
+      width: 220,
+      height: 120,
+      direction: "ltr",
+      nodeWidth: 96,
+      nodeHeight: 32
+    });
+    expect(formatted.points.get("root")?.width).toBe(96);
+    expect(formatted.points.get("root")?.height).toBe(32);
   });
 });
