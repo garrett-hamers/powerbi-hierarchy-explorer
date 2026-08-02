@@ -1,0 +1,238 @@
+:root {
+  --atlyn-background: #ffffff;
+  --atlyn-foreground: #242424;
+  --atlyn-muted: #5f6368;
+  --atlyn-accent: #2764c4;
+  --atlyn-border: #d9dce1;
+  --atlyn-warning: #8a4b00;
+  --atlyn-error: #b42318;
+}
+
+.atlyn-root {
+  background: var(--atlyn-background);
+  color: var(--atlyn-foreground);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  height: 100%;
+  min-height: 96px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.atlyn-root *,
+.atlyn-root *::before,
+.atlyn-root *::after {
+  box-sizing: inherit;
+}
+
+.atlyn-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--atlyn-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 8px;
+}
+
+.atlyn-toolbar label {
+  color: var(--atlyn-muted);
+  font-weight: 600;
+}
+
+.atlyn-search {
+  border: 1px solid var(--atlyn-border);
+  border-radius: 3px;
+  color: inherit;
+  flex: 1 1 120px;
+  min-width: 80px;
+  padding: 5px 7px;
+}
+
+.atlyn-button {
+  background: var(--atlyn-background);
+  border: 1px solid var(--atlyn-border);
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  min-height: 27px;
+  padding: 4px 8px;
+}
+
+.atlyn-button:hover,
+.atlyn-button:focus-visible,
+.atlyn-node:focus-visible,
+.atlyn-semantic-item:focus-visible {
+  outline: 2px solid var(--atlyn-accent);
+  outline-offset: 1px;
+}
+
+.atlyn-button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.atlyn-status {
+  color: var(--atlyn-muted);
+  min-height: 24px;
+  padding: 4px 8px;
+}
+
+.atlyn-diagnostics {
+  border-bottom: 1px solid var(--atlyn-border);
+  max-height: 86px;
+  overflow: auto;
+  padding: 4px 8px;
+}
+
+.atlyn-diagnostic {
+  margin: 2px 0;
+}
+
+.atlyn-diagnostic[data-severity="error"] {
+  color: var(--atlyn-error);
+}
+
+.atlyn-diagnostic[data-severity="warning"] {
+  color: var(--atlyn-warning);
+}
+
+.atlyn-breadcrumb {
+  color: var(--atlyn-muted);
+  min-height: 25px;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlyn-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.atlyn-graph {
+  display: block;
+  min-height: 170px;
+  width: 100%;
+}
+
+.atlyn-edge {
+  stroke: var(--atlyn-border);
+  stroke-width: 1.5;
+}
+
+.atlyn-node-card {
+  fill: var(--atlyn-background);
+  stroke: var(--atlyn-accent);
+  stroke-width: 1.5;
+}
+
+.atlyn-node-card[data-selected="true"] {
+  stroke-width: 3;
+}
+
+.atlyn-node-card[data-highlighted="true"] {
+  stroke: var(--atlyn-warning);
+}
+
+.atlyn-node-card[data-search-match="true"] {
+  fill: #fff4c2;
+}
+
+.atlyn-node-label {
+  fill: var(--atlyn-foreground);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.atlyn-node-subtitle {
+  fill: var(--atlyn-muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.atlyn-semantic-tree {
+  border-top: 1px solid var(--atlyn-border);
+  max-height: 38%;
+  overflow: auto;
+  padding: 4px 8px;
+}
+
+.atlyn-semantic-item {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  min-height: 25px;
+  padding-inline-start: calc((var(--atlyn-level) - 1) * 17px);
+}
+
+.atlyn-semantic-item[aria-selected="true"] {
+  background: #e7efff;
+}
+
+.atlyn-semantic-label {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 3px;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlyn-semantic-toggle {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  min-width: 24px;
+}
+
+.atlyn-empty {
+  color: var(--atlyn-muted);
+  padding: 20px 8px;
+  text-align: center;
+}
+
+.atlyn-root[data-high-contrast="true"] {
+  --atlyn-background: #000000;
+  --atlyn-foreground: #ffffff;
+  --atlyn-muted: #ffffff;
+  --atlyn-accent: #ffff00;
+  --atlyn-border: #ffffff;
+  --atlyn-warning: #ffff00;
+  --atlyn-error: #ff8080;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlyn-root * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .atlyn-toolbar {
+    align-items: stretch;
+  }
+
+  .atlyn-toolbar label {
+    flex-basis: 100%;
+  }
+
+  .atlyn-search {
+    flex-basis: 100%;
+  }
+
+  .atlyn-semantic-tree {
+    max-height: 48%;
+  }
+}

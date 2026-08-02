@@ -1,0 +1,24 @@
+{
+  "visual": {
+    "name": "AtlynHierarchyExplorer",
+    "displayName": "Atlyn Hierarchy Explorer",
+    "guid": "atlynHierarchyExplorer",
+    "visualClassName": "Visual",
+    "version": "1.0.0.0",
+    "description": "Accessible, diagnostic-first parent-child hierarchy exploration.",
+    "supportUrl": "https://github.com/garrett-hamers/powerbi-hierarchy-explorer"
+  },
+  "apiVersion": "5.11.0",
+  "author": {
+    "name": "Atlyn",
+    "email": "support@atlyn.example"
+  },
+  "assets": {
+    "icon": "assets/icon.png"
+  },
+  "externalJS": [],
+  "style": "style/visual.less",
+  "capabilities": "capabilities.json",
+  "dependencies": "dependencies.json",
+  "stringResources": []
+}
