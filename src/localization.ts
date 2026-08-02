@@ -1,4 +1,5 @@
 export interface LocalizedStrings {
+  visualName: string;
   searchLabel: string;
   searchPlaceholder: string;
   selectDescendants: string;
@@ -16,9 +17,26 @@ export interface LocalizedStrings {
   descendants: string;
   child: string;
   children: string;
+  graph: string;
+  tree: string;
+  label: string;
+  nodeId: string;
+  parentId: string;
+  depth: string;
+  childCount: string;
+  category: string;
+  value: string;
+  dataQuality: string;
+  sourceRow: string;
+  emptySpace: string;
+  matrixUnsupported: string;
+  boundedContract: string;
+  tableMode: string;
+  matrixMode: string;
 }
 
 const ENGLISH: LocalizedStrings = {
+  visualName: "Atlyn Hierarchy Explorer",
   searchLabel: "Search",
   searchPlaceholder: "Find a node",
   selectDescendants: "Select descendants",
@@ -35,7 +53,23 @@ const ENGLISH: LocalizedStrings = {
   selected: "selected",
   descendants: "descendants",
   child: "child",
-  children: "children"
+  children: "children",
+  graph: "Graphical hierarchy",
+  tree: "Hierarchy tree",
+  label: "Label",
+  nodeId: "Node ID",
+  parentId: "Parent ID",
+  depth: "Depth",
+  childCount: "Children",
+  category: "Category",
+  value: "Value",
+  dataQuality: "Data quality",
+  sourceRow: "Retained table row",
+  emptySpace: "Empty visual space",
+  matrixUnsupported: "Matrix mode is not enabled. Use the table NodeId, ParentId, and Label roles.",
+  boundedContract: "bounded table contract active",
+  tableMode: "Table mode",
+  matrixMode: "Matrix mode"
 };
 
 const TRANSLATIONS: Record<string, Partial<LocalizedStrings>> = {
@@ -113,7 +147,10 @@ const TRANSLATIONS: Record<string, Partial<LocalizedStrings>> = {
     selected: "محددة",
     descendants: "الفروع",
     child: "فرع",
-    children: "فروع"
+    children: "فروع",
+    boundedContract: "عقد الجدول المحدود نشط",
+    tableMode: "وضع الجدول",
+    matrixMode: "وضع المصفوفة"
   }
 };
 

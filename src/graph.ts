@@ -31,13 +31,13 @@ export interface HierarchyRow {
   value?: unknown;
   tooltips?: Record<string, unknown>;
   sourceRow?: number;
-  highlighted?: boolean;
 }
 
 export interface GraphInput {
   rows: readonly HierarchyRow[];
   receivedCount?: number;
   truncated?: boolean;
+  boundedContract?: boolean;
   rolesPresent?: Partial<Record<"NodeId" | "ParentId" | "Label", boolean>>;
 }
 
@@ -57,7 +57,6 @@ export interface HierarchyNode {
   children: string[];
   depth: number;
   sourceRow: number;
-  highlighted: boolean;
   qualityFlags: DiagnosticCode[];
 }
 
@@ -72,6 +71,7 @@ export interface GraphModel {
   maxDepth: number;
   nodeCap: number;
   depthCap: number;
+  boundedContract: boolean;
 }
 
 export const TABLE_ROW_CAP = 30000;
@@ -397,7 +397,6 @@ export function buildHierarchy(
       children: [],
       depth: depthById.get(id) ?? 0,
       sourceRow: row.sourceRow ?? 0,
-      highlighted: row.highlighted === true,
       qualityFlags: sortIds(flags) as DiagnosticCode[]
     });
   });
@@ -408,6 +407,19 @@ export function buildHierarchy(
   });
   nodes.forEach((node) => node.children.sort((left, right) => left.localeCompare(right, "en", { numeric: true })));
   const finalRoots = sortIds(Array.from(nodes.values()).filter((node) => !node.parentId).map((node) => node.id));
+  const finalDepthById = new Map<string, number>();
+  const depthQueue = finalRoots.map((id) => ({ id, depth: 0 }));
+  while (depthQueue.length > 0) {
+    const item = depthQueue.shift()!;
+    if (finalDepthById.has(item.id)) {
+      continue;
+    }
+    finalDepthById.set(item.id, item.depth);
+    nodes.get(item.id)?.children.forEach((child) => depthQueue.push({ id: child, depth: item.depth + 1 }));
+  }
+  nodes.forEach((node) => {
+    node.depth = finalDepthById.get(node.id) ?? 0;
+  });
   if (finalRoots.length > 1) {
     diagnostics.push(
       diagnostic("multiple-roots", "info", "Multiple roots form a forest and are rendered side-by-side.", finalRoots)
@@ -421,12 +433,15 @@ export function buildHierarchy(
   const receivedCount = normalizedInput.receivedCount ?? rows.length;
   const truncated =
     normalizedInput.truncated === true || receivedCount > rows.length || rows.length >= TABLE_ROW_CAP;
+  const boundedContract = normalizedInput.boundedContract === true || truncated;
   if (truncated) {
     diagnostics.push(
       diagnostic(
         "data-reduction",
         "warning",
-        `Data reduction may have truncated the received table (received ${rows.length.toLocaleString()} rows).`
+        boundedContract
+          ? `The table is rendered under the explicit ${TABLE_ROW_CAP.toLocaleString()}-row bounded contract; additional host segments may not be loaded (received ${rows.length.toLocaleString()} rows).`
+          : `Data reduction may have truncated the received table (received ${rows.length.toLocaleString()} rows).`
       )
     );
   }
@@ -441,7 +456,8 @@ export function buildHierarchy(
     truncated,
     maxDepth,
     nodeCap,
-    depthCap
+    depthCap,
+    boundedContract
   };
 }
 
