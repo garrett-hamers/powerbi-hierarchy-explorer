@@ -34,6 +34,12 @@ jobs:
         run: npm test
       - name: Package
         run: npm run package
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlyn-hierarchy-explorer-package
+          path: dist/*.pbiviz
+          if-no-files-found: error
       - name: Certification audit
         run: npm run certification-audit
       - name: Full dependency audit
