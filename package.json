@@ -4,17 +4,22 @@
   "private": true,
   "description": "Atlyn Hierarchy Explorer Power BI custom visual",
   "license": "MIT",
+  "overrides": {
+    "uuid": "11.1.1"
+  },
   "scripts": {
     "build": "pbiviz package",
     "package": "pbiviz package",
     "start": "pbiviz start",
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests --ext .ts",
-    "audit": "npm audit --audit-level=high"
+    "eslint": "npx eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint": "npm run eslint",
+    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts",
+    "audit": "npm audit"
   },
   "dependencies": {
-    "powerbi-visuals-api": "^5.11.0"
+    "powerbi-visuals-api": "5.11.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -25,7 +30,8 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "less": "^4.2.0",
-    "powerbi-visuals-tools": "^6.1.1",
+    "eslint-plugin-powerbi-visuals": "1.1.1",
+    "powerbi-visuals-tools": "7.2.1",
     "ts-jest": "^29.2.5",
     "typescript": "^5.7.2"
   }

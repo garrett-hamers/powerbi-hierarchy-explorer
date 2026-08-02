@@ -166,10 +166,29 @@
 }
 
 .atlyn-semantic-tree {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  max-height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.atlyn-semantic-tree:focus-within {
   border-top: 1px solid var(--atlyn-border);
+  clip: auto;
+  clip-path: none;
+  height: auto;
+  margin: 0;
   max-height: 38%;
   overflow: auto;
   padding: 4px 8px;
+  position: relative;
+  white-space: normal;
+  width: auto;
 }
 
 .atlyn-semantic-item {
@@ -200,7 +219,8 @@
   border: 0;
   color: inherit;
   cursor: pointer;
-  min-width: 24px;
+  min-height: 32px;
+  min-width: 32px;
 }
 
 .atlyn-semantic-item {
@@ -227,6 +247,16 @@
 .atlyn-root[data-high-contrast="true"] .atlyn-semantic-item[aria-selected="true"] {
   background: var(--atlyn-background);
   outline: 1px solid var(--atlyn-foreground);
+}
+
+.atlyn-root[data-high-contrast="true"] .atlyn-node-card {
+  stroke: var(--atlyn-foreground);
+}
+
+.atlyn-root[data-interactions-disabled="true"] .atlyn-button,
+.atlyn-root[data-interactions-disabled="true"] .atlyn-semantic-item,
+.atlyn-root[data-interactions-disabled="true"] .atlyn-semantic-toggle {
+  cursor: default;
 }
 
 .atlyn-root[data-reduced-motion="true"] * {

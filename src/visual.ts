@@ -29,6 +29,7 @@ type LocalizationManager = powerbi.extensibility.ILocalizationManager;
 interface RuntimeSelectionManager {
   select?: (selectionId: SelectionId | SelectionId[], multiSelect?: boolean) => Promise<unknown>;
   clear?: () => Promise<unknown>;
+  getSelectionIds?: () => SelectionId[];
   showContextMenu?: (
     selectionId: SelectionId,
     position: powerbi.extensibility.IPoint,
@@ -40,16 +41,39 @@ interface RuntimeSelectionManager {
 interface ParsedTable {
   rows: HierarchyRow[];
   rolesPresent: Partial<Record<"NodeId" | "ParentId" | "Label", boolean>>;
-  selectionIdsByRow: Map<number, SelectionId>;
+  selectionIdsBySourceKey: Map<string, SelectionId>;
   receivedCount: number;
   truncated: boolean;
   boundedContract: boolean;
+  partial: boolean;
+  contractDiagnostics: Diagnostic[];
 }
 
 const ROLE_ORDER = ["NodeId", "ParentId", "Label", "Subtitle", "Category", "Value", "Tooltips"] as const;
 const NODE_CAP = 10000;
 const DEPTH_CAP = 50;
+const RENDER_NODE_CAP = 2000;
+const MAX_SEGMENT_REQUESTS = 32;
 const LONG_PRESS_MS = 550;
+
+type RequiredRole = "NodeId" | "ParentId" | "Label";
+
+function stableValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return `date:${value.toISOString()}`;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${key}:${stableValue(record[key])}`)
+      .join("|")}}`;
+  }
+  return `${typeof value}:${String(value)}`;
+}
 
 function text(value: unknown): string {
   if (value === null || value === undefined) {
@@ -75,7 +99,6 @@ function selectionKey(selectionId: SelectionId): string {
 export class Visual implements powerbi.extensibility.visual.IVisual {
   private static instanceCount = 0;
 
-  public readonly allowInteractions = true;
   private readonly host: VisualHost;
   private readonly root: HTMLDivElement;
   private readonly toolbar: HTMLDivElement;
@@ -107,6 +130,18 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   private direction: "ltr" | "rtl";
   private dataMode: "empty" | "table" | "matrix" = "empty";
   private modeMessage = "";
+  private dataState: "empty" | "ready" | "loading" | "partial" = "empty";
+  private readonly interactionsEnabled: boolean;
+  private accumulatedRows: HierarchyRow[] = [];
+  private accumulatedSelectionIds = new Map<string, SelectionId>();
+  private accumulatedDiagnostics: Diagnostic[] = [];
+  private segmentOrdinal = 0;
+  private segmentRequestCount = 0;
+  private partialData = false;
+  private tooltipNodeId: string | null = null;
+  private typeaheadBuffer = "";
+  private typeaheadTimer: ReturnType<typeof setTimeout> | undefined;
+  private suppressedClickTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
   private lastUpdateOptions: VisualUpdateOptions | undefined;
   private longPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -117,6 +152,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       throw new Error("Atlyn Hierarchy Explorer requires a visual host element.");
     }
     this.host = options.host;
+    this.interactionsEnabled = this.host.hostCapabilities?.allowInteractions !== false;
     this.selectionManager = this.host.createSelectionManager();
     this.localizationManager =
       typeof this.host.createLocalizationManager === "function"
@@ -204,6 +240,43 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.canvasWrap.append(this.emptyElement, this.graphSvg, this.semanticTree);
     this.root.appendChild(this.canvasWrap);
 
+    this.graphSvg.addEventListener("click", this.onGraphClick);
+    this.graphSvg.addEventListener("dblclick", this.onGraphDoubleClick);
+    this.graphSvg.addEventListener("contextmenu", this.onGraphContextMenu);
+    this.graphSvg.addEventListener("mouseenter", this.onGraphMouseEnter, true);
+    this.graphSvg.addEventListener("mouseleave", this.onGraphMouseLeave, true);
+    this.graphSvg.addEventListener("pointerover", this.onGraphPointerOver);
+    this.graphSvg.addEventListener("pointermove", this.onGraphPointerMove);
+    this.graphSvg.addEventListener("pointerout", this.onGraphPointerOut);
+    this.graphSvg.addEventListener("touchstart", this.onGraphTouchStart, { passive: true });
+    this.graphSvg.addEventListener("touchend", this.onTouchEnd, { passive: false });
+    this.graphSvg.addEventListener("touchcancel", this.onTouchCancel, { passive: true });
+    this.cleanup.push(() => this.graphSvg.removeEventListener("click", this.onGraphClick));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("dblclick", this.onGraphDoubleClick));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("contextmenu", this.onGraphContextMenu));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("mouseenter", this.onGraphMouseEnter, true));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("mouseleave", this.onGraphMouseLeave, true));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("pointerover", this.onGraphPointerOver));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("pointermove", this.onGraphPointerMove));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("pointerout", this.onGraphPointerOut));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("touchstart", this.onGraphTouchStart));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("touchend", this.onTouchEnd));
+    this.cleanup.push(() => this.graphSvg.removeEventListener("touchcancel", this.onTouchCancel));
+    this.semanticTree.addEventListener("click", this.onSemanticTreeClick);
+    this.semanticTree.addEventListener("contextmenu", this.onSemanticTreeContextMenu);
+    this.semanticTree.addEventListener("keydown", this.onSemanticTreeKeyDown);
+    this.semanticTree.addEventListener("focusin", this.onSemanticTreeFocusIn);
+    this.semanticTree.addEventListener("touchstart", this.onSemanticTreeTouchStart, { passive: true });
+    this.semanticTree.addEventListener("touchend", this.onTouchEnd, { passive: false });
+    this.semanticTree.addEventListener("touchcancel", this.onTouchCancel, { passive: true });
+    this.cleanup.push(() => this.semanticTree.removeEventListener("click", this.onSemanticTreeClick));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("contextmenu", this.onSemanticTreeContextMenu));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("keydown", this.onSemanticTreeKeyDown));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("focusin", this.onSemanticTreeFocusIn));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("touchstart", this.onSemanticTreeTouchStart));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("touchend", this.onTouchEnd));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("touchcancel", this.onTouchCancel));
+
     this.root.addEventListener("keydown", this.onRootKeyDown);
     this.cleanup.push(() => this.root.removeEventListener("keydown", this.onRootKeyDown));
 
@@ -217,9 +290,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     if (this.destroyed) {
       return;
     }
-    this.lastUpdateOptions = options;
-    this.fireRenderingEvent("renderingStarted", options);
     try {
+      this.fireRenderingEvent("renderingStarted", options);
+      this.lastUpdateOptions = options;
       const dataView = options.dataViews?.[0];
       this.locale = this.host.locale ?? this.locale;
       this.formatting = readFormattingValues(dataView);
@@ -230,14 +303,37 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       if (dataView?.table) {
         this.dataMode = "table";
         this.modeMessage = "";
-        const parsed = this.parseTable(dataView.table, dataView);
+        const operationKind = options.operationKind as unknown as number | undefined;
+        const append =
+          operationKind === 1 ||
+          operationKind === 2 ||
+          (dataView.metadata?.segment !== undefined && this.partialData);
+        if (!append) {
+          this.resetAccumulatedTable();
+        }
+        const parsed = this.parseTable(dataView.table, dataView, this.segmentOrdinal);
+        this.segmentOrdinal += 1;
+        this.accumulatedDiagnostics.push(...parsed.contractDiagnostics);
+        parsed.rows.forEach((row) => {
+          const sourceKey = row.sourceKey ?? `row:${row.sourceRow ?? 0}`;
+          if (this.accumulatedSelectionIds.has(sourceKey)) {
+            return;
+          }
+          this.accumulatedRows.push(row);
+          const selectionId = parsed.selectionIdsBySourceKey.get(sourceKey);
+          if (selectionId) {
+            this.accumulatedSelectionIds.set(sourceKey, selectionId);
+          }
+        });
+        this.partialData = parsed.partial;
         this.graph = buildHierarchy(
           {
-            rows: parsed.rows,
-            receivedCount: parsed.receivedCount,
-            truncated: parsed.truncated,
-            boundedContract: parsed.boundedContract,
-            rolesPresent: parsed.rolesPresent
+            rows: this.accumulatedRows,
+            receivedCount: this.accumulatedRows.length,
+            truncated: this.partialData || parsed.truncated,
+            boundedContract: true,
+            rolesPresent: parsed.rolesPresent,
+            inputDiagnostics: this.accumulatedDiagnostics
           },
           { nodeCap: NODE_CAP, depthCap: DEPTH_CAP }
         );
@@ -248,14 +344,24 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         });
         this.selectionIds = new Map<string, SelectionId>();
         this.graph.nodes.forEach((node, id) => {
-          const selectionId = parsed.selectionIdsByRow.get(node.sourceRow);
+          const selectionId = this.accumulatedSelectionIds.get(node.sourceKey);
           if (selectionId) {
             this.selectionIds.set(id, selectionId);
           }
         });
+        this.syncHostSelection();
+        this.requestMoreData(parsed.partial);
+        this.dataState = parsed.partial
+          ? this.dataState === "loading"
+            ? "loading"
+            : "partial"
+          : "ready";
       } else if (dataView?.matrix) {
         this.dataMode = "matrix";
         this.modeMessage = this.strings.matrixUnsupported;
+        this.resetAccumulatedTable();
+        this.partialData = false;
+        this.dataState = "empty";
         this.graph = buildHierarchy({
           rows: [],
           rolesPresent: { NodeId: false, ParentId: false, Label: false }
@@ -264,6 +370,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       } else {
         this.dataMode = "empty";
         this.modeMessage = "";
+        this.resetAccumulatedTable();
+        this.partialData = false;
+        this.dataState = "empty";
         this.graph = buildHierarchy({
           rows: [],
           rolesPresent: { NodeId: false, ParentId: false, Label: false }
@@ -276,11 +385,12 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         this.focusedId = null;
       }
       this.render();
-      this.fireRenderingEvent("renderingFinished", options);
     } catch (error) {
       this.showRenderFailure(error);
       this.fireRenderingEvent("renderingFailed", options, error);
+      return;
     }
+    this.fireRenderingEvent("renderingFinished", options);
   }
 
   public destroy(): void {
@@ -289,6 +399,14 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     }
     this.destroyed = true;
     this.clearLongPress();
+    if (this.typeaheadTimer) {
+      clearTimeout(this.typeaheadTimer);
+      this.typeaheadTimer = undefined;
+    }
+    if (this.suppressedClickTimer) {
+      clearTimeout(this.suppressedClickTimer);
+      this.suppressedClickTimer = undefined;
+    }
     this.hideTooltip();
     this.cleanup.splice(0).forEach((dispose) => dispose());
     this.root.remove();
@@ -306,15 +424,74 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     return this.selectionManager as unknown as RuntimeSelectionManager;
   }
 
+  private resetAccumulatedTable(): void {
+    this.accumulatedRows = [];
+    this.accumulatedSelectionIds.clear();
+    this.accumulatedDiagnostics = [];
+    this.segmentOrdinal = 0;
+    this.segmentRequestCount = 0;
+    this.partialData = false;
+    this.dataState = "empty";
+  }
+
+  private requestMoreData(partial: boolean): void {
+    if (!partial) {
+      this.segmentRequestCount = 0;
+      return;
+    }
+    if (this.segmentRequestCount >= MAX_SEGMENT_REQUESTS) {
+      this.dataState = "partial";
+      return;
+    }
+    const fetchMoreData = this.host.fetchMoreData;
+    if (typeof fetchMoreData !== "function") {
+      this.dataState = "partial";
+      return;
+    }
+    this.segmentRequestCount += 1;
+    const requested = fetchMoreData(false);
+    this.dataState = requested ? "loading" : "partial";
+  }
+
   private onHostSelection = (selectionIds: SelectionId[]): void => {
+    if (this.destroyed) {
+      return;
+    }
     const selectedKeys = new Set(selectionIds.map((selectionId) => selectionKey(selectionId)));
     this.selected = new Set(
       Array.from(this.selectionIds.entries())
         .filter(([, selectionId]) => selectedKeys.has(selectionKey(selectionId)))
         .map(([id]) => id)
     );
-    this.render();
+    this.refreshSelectionState();
   };
+
+  private syncHostSelection(): void {
+    const selectionIds = this.runtimeSelectionManager().getSelectionIds?.();
+    if (!selectionIds) {
+      return;
+    }
+    this.onHostSelection(selectionIds);
+  }
+
+  private refreshSelectionState(): void {
+    this.semanticItems.forEach((item, id) => {
+      item.setAttribute("aria-selected", String(this.selected.has(id)));
+    });
+    this.graphSvg.querySelectorAll<SVGRectElement>(".atlyn-node-card").forEach((card) => {
+      const id = card.closest("[data-node-id]")?.getAttribute("data-node-id");
+      if (id) {
+        card.dataset.selected = String(this.selected.has(id));
+      }
+    });
+    const visibleIds = flattenVisibleIds(this.graph, this.collapsed);
+    this.renderBreadcrumb();
+    this.renderStatus(visibleIds.length, Math.min(visibleIds.length, RENDER_NODE_CAP));
+    const activeId = this.focusedId ?? Array.from(this.selected)[0];
+    this.selectDescendantsButton.disabled =
+      !this.interactionsEnabled || !activeId || !this.formatting.enableDescendantSelection;
+    this.clearSelectionButton.disabled = !this.interactionsEnabled || this.selected.size === 0;
+  }
 
   private createButton(label: string, handler: () => void): HTMLButtonElement {
     const button = document.createElement("button");
@@ -326,7 +503,11 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     return button;
   }
 
-  private parseTable(table: powerbi.DataViewTable, dataView: powerbi.DataView): ParsedTable {
+  private parseTable(
+    table: powerbi.DataViewTable,
+    dataView: powerbi.DataView,
+    segmentOrdinal: number
+  ): ParsedTable {
     const columns = table.columns ?? [];
     const rows = table.rows ?? [];
     const roleIndices = new Map<string, number[]>();
@@ -341,24 +522,80 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         }, [])
       );
     });
+    const contractDiagnostics: Diagnostic[] = [];
+    const addContractDiagnostic = (
+      code: Diagnostic["code"],
+      severity: Diagnostic["severity"],
+      message: string,
+      count = 0
+    ): void => {
+      contractDiagnostics.push({ code, severity, message, count, nodeIds: [] });
+    };
     const rolesPresent = {
       NodeId: (roleIndices.get("NodeId")?.length ?? 0) > 0,
       ParentId: (roleIndices.get("ParentId")?.length ?? 0) > 0,
       Label: (roleIndices.get("Label")?.length ?? 0) > 0
     };
+    const requiredRoles: RequiredRole[] = ["NodeId", "ParentId", "Label"];
+    const requiredRoleShapeValid = requiredRoles.every((role) => (roleIndices.get(role)?.length ?? 0) === 1);
+    ROLE_ORDER.forEach((role) => {
+      const count = roleIndices.get(role)?.length ?? 0;
+      const max = role === "Tooltips" ? 10 : 1;
+      if (count > max) {
+        addContractDiagnostic(
+          "invalid-cardinality",
+          "error",
+          `${role} accepts at most ${max} field${max === 1 ? "" : "s"}; extra fields were not used.`,
+          count - max
+        );
+      }
+    });
+    const unsupportedTypeRoles = requiredRoles.filter((role) =>
+      (roleIndices.get(role) ?? []).some((index) => {
+        const type = columns[index]?.type as Record<string, unknown> | undefined;
+        return type !== undefined && (type.bool === true || type.binary === true);
+      })
+    );
+    if (unsupportedTypeRoles.length > 0) {
+      addContractDiagnostic(
+        "invalid-data-shape",
+        "error",
+        `Unsupported data type for ${unsupportedTypeRoles.join(", ")}. Use text, numeric, or date fields.`
+      );
+    }
     const valueAt = (row: powerbi.DataViewTableRow, role: string): unknown => {
       const index = roleIndices.get(role)?.[0];
       return index === undefined ? undefined : row[index];
     };
     const tooltipIndices = roleIndices.get("Tooltips") ?? [];
-    const selectionIdsByRow = new Map<number, SelectionId>();
-    const parsedRows = rows.map((row, index) => {
+    const selectionIdsBySourceKey = new Map<string, SelectionId>();
+    const parsedRows: HierarchyRow[] = [];
+    rows.forEach((row, index) => {
+      if (!Array.isArray(row)) {
+        addContractDiagnostic("invalid-data-shape", "error", "A table row was not an array and was excluded.", 1);
+        return;
+      }
+      if (row.length < columns.length) {
+        addContractDiagnostic("invalid-data-shape", "warning", "Partial table rows were received.", 1);
+      } else if (row.length > columns.length) {
+        addContractDiagnostic("invalid-data-shape", "warning", "Table rows contained unexpected extra values.", 1);
+      }
+      const sourceKey = table.identity?.[index]
+        ? `identity:${stableValue(table.identity[index])}`
+        : `segment:${segmentOrdinal}:${index}`;
       const tooltips: Record<string, unknown> = {};
       tooltipIndices.forEach((columnIndex) => {
         tooltips[columns[columnIndex]?.displayName ?? `Tooltip ${columnIndex + 1}`] = row[columnIndex];
       });
-      selectionIdsByRow.set(index, this.createSelectionId(table, index));
-      return {
+      if (requiredRoleShapeValid && unsupportedTypeRoles.length === 0) {
+        if (!selectionIdsBySourceKey.has(sourceKey)) {
+          selectionIdsBySourceKey.set(sourceKey, this.createSelectionId(table, index));
+        }
+      }
+      if (!requiredRoleShapeValid || unsupportedTypeRoles.length > 0) {
+        return;
+      }
+      parsedRows.push({
         nodeId: valueAt(row, "NodeId"),
         parentId: valueAt(row, "ParentId"),
         label: valueAt(row, "Label"),
@@ -366,18 +603,28 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         category: valueAt(row, "Category"),
         value: valueAt(row, "Value"),
         tooltips,
-        sourceRow: index
-      };
+        sourceRow: index,
+        sourceKey
+      });
     });
-    const boundedContract =
-      dataView.metadata?.segment !== undefined || rows.length >= TABLE_ROW_CAP;
+    const partial = dataView.metadata?.segment !== undefined;
+    const truncated = partial || dataView.metadata?.dataReduction !== undefined || rows.length > TABLE_ROW_CAP;
+    if (partial) {
+      addContractDiagnostic(
+        "partial-data",
+        "warning",
+        "Only the currently received table segment is rendered; additional rows may still be loading."
+      );
+    }
     return {
       rows: parsedRows,
       rolesPresent,
-      selectionIdsByRow,
+      selectionIdsBySourceKey,
       receivedCount: rows.length,
-      truncated: boundedContract,
-      boundedContract
+      truncated,
+      boundedContract: true,
+      partial,
+      contractDiagnostics
     };
   }
 
@@ -385,11 +632,185 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     return this.host.createSelectionIdBuilder().withTable(table, rowIndex).createSelectionId();
   }
 
+  private nodeIdFromTarget(target: EventTarget | null, attribute: "node-id" | "semantic-node-id"): string | null {
+    const element = target instanceof Element ? target.closest(`[data-${attribute}]`) : null;
+    return element ? element.getAttribute(`data-${attribute}`) : null;
+  }
+
+  private onGraphClick = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id) {
+      this.onNodeClick(id, event);
+    }
+  };
+
+  private onGraphDoubleClick = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id && this.formatting.enableCollapse) {
+      event.preventDefault();
+      this.toggleCollapsed(id);
+    }
+  };
+
+  private onGraphContextMenu = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    event.preventDefault();
+    this.showContextMenu(this.nodeIdFromTarget(event.target, "node-id") ?? undefined, event.clientX, event.clientY);
+  };
+
+  private onGraphMouseEnter = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id && id !== this.tooltipNodeId) {
+      this.showTooltip(id, event.clientX, event.clientY, false);
+    }
+  };
+
+  private onGraphMouseLeave = (event: MouseEvent): void => {
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id && id === this.tooltipNodeId) {
+      this.hideTooltip();
+    }
+  };
+
+  private onGraphTouchStart = (event: TouchEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id) {
+      this.onNodeTouchStart(id, event);
+    }
+  };
+
+  private onGraphPointerOver = (event: PointerEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id && id !== this.tooltipNodeId) {
+      this.showTooltip(id, event.clientX, event.clientY, false);
+    }
+  };
+
+  private onGraphPointerMove = (event: PointerEvent): void => {
+    if (!this.interactionsEnabled || !this.tooltipNodeId) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    if (id !== this.tooltipNodeId) {
+      return;
+    }
+    const tooltipService = this.host.tooltipService;
+    if (tooltipService && typeof tooltipService.move === "function") {
+      tooltipService.move({
+        coordinates: [event.clientX, event.clientY],
+        identities: this.selectionIds.get(id) ? [this.selectionIds.get(id)!] : [],
+        isTouchEvent: false
+      });
+    }
+  };
+
+  private onGraphPointerOut = (event: PointerEvent): void => {
+    const id = this.nodeIdFromTarget(event.target, "node-id");
+    const nextId = this.nodeIdFromTarget(event.relatedTarget, "node-id");
+    if (id && id === this.tooltipNodeId && nextId !== id) {
+      this.hideTooltip();
+    }
+  };
+
+  private onSemanticTreeClick = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    const id = this.nodeIdFromTarget(target, "semantic-node-id");
+    if (!id) {
+      return;
+    }
+    if (target?.closest(".atlyn-semantic-toggle")) {
+      event.stopPropagation();
+      if (this.formatting.enableCollapse) {
+        this.toggleCollapsed(id);
+      }
+      return;
+    }
+    this.onNodeClick(id, event);
+  };
+
+  private onSemanticTreeContextMenu = (event: MouseEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
+    event.preventDefault();
+    this.showContextMenu(id ?? undefined, event.clientX, event.clientY);
+  };
+
+  private onSemanticTreeKeyDown = (event: KeyboardEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
+    if (id) {
+      this.onTreeItemKeyDown(id, event);
+    }
+  };
+
+  private onSemanticTreeFocusIn = (event: FocusEvent): void => {
+    const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
+    if (id) {
+      this.focusedId = id;
+    }
+  };
+
+  private onSemanticTreeTouchStart = (event: TouchEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
+    if (id) {
+      this.onNodeTouchStart(id, event);
+    }
+  };
+
   private render(): void {
     if (this.destroyed) {
       return;
     }
+    const activeElement = document.activeElement;
+    const shouldRestoreFocus = this.semanticTree.contains(activeElement);
+    const restoreFocusId = shouldRestoreFocus
+      ? this.nodeIdFromTarget(activeElement, "semantic-node-id")
+      : null;
     const visibleIds = flattenVisibleIds(this.graph, this.collapsed);
+    const prioritizedIds = new Set<string>();
+    if (this.searchQuery) {
+      visibleIds.forEach((id) => {
+        const node = this.graph.nodes.get(id);
+        if (node && this.matchesSearch(node)) {
+          prioritizedIds.add(id);
+          getAncestorIds(this.graph, id, true).forEach((ancestorId) => prioritizedIds.add(ancestorId));
+        }
+      });
+    }
+    const renderIds = [
+      ...visibleIds.filter((id) => prioritizedIds.has(id)),
+      ...visibleIds.filter((id) => !prioritizedIds.has(id))
+    ].slice(0, RENDER_NODE_CAP);
+    if (this.focusedId && !renderIds.includes(this.focusedId)) {
+      this.focusedId = renderIds[0] ?? null;
+    }
     this.graphSvg.replaceChildren();
     this.semanticTree.replaceChildren();
     this.semanticItems.clear();
@@ -406,26 +827,35 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       nodeHeight: this.formatting.nodeHeight,
       horizontalGap: this.formatting.horizontalGap,
       verticalGap: this.formatting.verticalGap,
-      padding: this.formatting.padding
+      padding: this.formatting.padding,
+      fitContent: this.formatting.fitContent,
+      fontSize: this.formatting.fontSize,
+      subtitleFontSize: this.formatting.subtitleFontSize
     });
     this.graphSvg.setAttribute("viewBox", `0 0 ${layout.width} ${layout.height}`);
     this.graphSvg.setAttribute("width", String(layout.width));
     this.graphSvg.setAttribute("height", String(layout.height));
-    this.renderEdges(layout, visibleIds);
-    visibleIds.forEach((id) => this.renderSvgNode(id, layout));
-    this.renderSemanticTree(visibleIds);
-    this.renderDiagnostics();
+    this.graphSvg.style.width = `${Math.ceil(layout.width * this.formatting.zoom)}px`;
+    this.graphSvg.style.height = `${Math.ceil(layout.height * this.formatting.zoom)}px`;
+    this.renderEdges(layout, renderIds);
+    renderIds.forEach((id) => this.renderSvgNode(id, layout));
+    this.renderSemanticTree(renderIds);
+    this.renderDiagnostics(visibleIds.length > renderIds.length);
     this.renderBreadcrumb();
-    this.renderStatus(visibleIds.length);
-    const activeId = this.focusedId && this.graph.nodes.has(this.focusedId) ? this.focusedId : visibleIds[0];
-    this.selectDescendantsButton.disabled = !activeId || !this.formatting.enableDescendantSelection;
+    this.renderStatus(visibleIds.length, renderIds.length);
+    const activeId = this.focusedId && this.graph.nodes.has(this.focusedId) ? this.focusedId : renderIds[0];
     this.selectDescendantsButton.hidden = !this.formatting.enableDescendantSelection;
-    this.clearSelectionButton.disabled = this.selected.size === 0;
+    this.selectDescendantsButton.disabled =
+      !this.interactionsEnabled || !activeId || !this.formatting.enableDescendantSelection;
+    this.clearSelectionButton.disabled = !this.interactionsEnabled || this.selected.size === 0;
     this.searchLabel.hidden = !this.formatting.enableSearch;
     this.searchInput.hidden = !this.formatting.enableSearch;
-    this.searchInput.disabled = !this.formatting.enableSearch;
+    this.searchInput.disabled = !this.interactionsEnabled || !this.formatting.enableSearch;
     if (!this.focusedId && activeId) {
       this.focusedId = activeId;
+    }
+    if (restoreFocusId && this.semanticItems.has(restoreFocusId)) {
+      this.semanticItems.get(restoreFocusId)?.focus({ preventScroll: true });
     }
   }
 
@@ -461,22 +891,6 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     group.classList.add("atlyn-node");
     group.setAttribute("aria-hidden", "true");
     group.dataset.nodeId = id;
-    group.addEventListener("click", (event) => this.onNodeClick(id, event as MouseEvent));
-    group.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      if (this.formatting.enableCollapse) {
-        this.toggleCollapsed(id);
-      }
-    });
-    group.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      this.showContextMenu(id, event.clientX, event.clientY);
-    });
-    group.addEventListener("mouseenter", (event) => this.showTooltip(id, event.clientX, event.clientY, false));
-    group.addEventListener("mouseleave", () => this.hideTooltip());
-    group.addEventListener("touchstart", (event) => this.onNodeTouchStart(id, event), { passive: true });
-    group.addEventListener("touchend", this.onTouchEnd, { passive: false });
-    group.addEventListener("touchcancel", this.onTouchCancel, { passive: true });
 
     const card = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     card.classList.add("atlyn-node-card");
@@ -513,6 +927,8 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   private renderSemanticTree(visibleIds: readonly string[]): void {
     this.semanticTree.setAttribute("aria-label", this.strings.tree);
     this.semanticTree.setAttribute("aria-setsize", String(visibleIds.length));
+    this.semanticTree.setAttribute("aria-busy", String(this.dataState === "loading"));
+    this.semanticTree.setAttribute("aria-disabled", String(!this.interactionsEnabled));
     const visible = new Set(visibleIds);
     visibleIds.forEach((id, index) => {
       const node = this.graph.nodes.get(id);
@@ -534,24 +950,14 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       item.setAttribute("aria-posinset", String(siblingIndex + 1));
       item.setAttribute("aria-setsize", String(siblings.length));
       item.setAttribute("aria-selected", String(this.selected.has(id)));
+      item.setAttribute("aria-disabled", String(!this.interactionsEnabled));
+      if (node.qualityFlags.some((flag) => ["empty-id", "duplicate-id", "conflicting-duplicate", "self-cycle", "cycle"].includes(flag))) {
+        item.setAttribute("aria-invalid", "true");
+      }
       if (node.children.length > 0) {
         item.setAttribute("aria-expanded", String(!this.collapsed.has(id)));
       }
       item.setAttribute("aria-label", this.nodeAriaLabel(node));
-      item.addEventListener("focus", () => {
-        this.focusedId = id;
-      });
-      item.addEventListener("keydown", (event) => this.onTreeItemKeyDown(id, event));
-      item.addEventListener("click", (event) => {
-        if ((event.target as Element).closest(".atlyn-semantic-toggle")) {
-          return;
-        }
-        this.onNodeClick(id, event as unknown as MouseEvent);
-      });
-      item.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        this.showContextMenu(id, event.clientX, event.clientY);
-      });
 
       if (node.children.length > 0) {
         const toggle = document.createElement("button");
@@ -564,12 +970,6 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
           `${this.collapsed.has(id) ? this.strings.expand : this.strings.collapse} ${node.label}`
         );
         toggle.hidden = !this.formatting.enableCollapse;
-        toggle.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (this.formatting.enableCollapse) {
-            this.toggleCollapsed(id);
-          }
-        });
         item.appendChild(toggle);
       }
       const label = document.createElement("span");
@@ -581,9 +981,10 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     });
   }
 
-  private renderDiagnostics(): void {
+  private renderDiagnostics(renderCapped = false): void {
     this.diagnosticsElement.replaceChildren();
-    this.diagnosticsElement.hidden = !this.formatting.showDiagnostics || this.graph.diagnostics.length === 0;
+    this.diagnosticsElement.hidden =
+      !this.formatting.showDiagnostics || (this.graph.diagnostics.length === 0 && !renderCapped);
     this.diagnosticsElement.setAttribute("aria-label", this.strings.diagnostics);
     if (this.diagnosticsElement.hidden) {
       return;
@@ -595,6 +996,13 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       line.textContent = this.localizeDiagnostic(item);
       this.diagnosticsElement.appendChild(line);
     });
+    if (renderCapped) {
+      const line = document.createElement("div");
+      line.className = "atlyn-diagnostic";
+      line.dataset.severity = "warning";
+      line.textContent = this.strings.renderCap;
+      this.diagnosticsElement.appendChild(line);
+    }
   }
 
   private renderBreadcrumb(): void {
@@ -610,7 +1018,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.breadcrumbElement.appendChild(content);
   }
 
-  private renderStatus(visibleCount: number): void {
+  private renderStatus(visibleCount: number, renderedCount: number): void {
     const selectedCount = this.selected.size;
     const selectedText = selectedCount > 0 ? `, ${selectedCount} ${this.strings.selected}` : "";
     const modeText =
@@ -622,7 +1030,17 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     const boundedText = this.graph.boundedContract
       ? `, ${TABLE_ROW_CAP.toLocaleString(this.locale)}-row ${this.strings.boundedContract}`
       : "";
-    this.status.textContent = `${modeText ? `${modeText}, ` : ""}${this.graph.receivedCount.toLocaleString(this.locale)} ${this.strings.received}, ${visibleCount.toLocaleString(this.locale)} ${this.strings.visible}, ${this.graph.excludedCount.toLocaleString(this.locale)} ${this.strings.excluded}${boundedText}${selectedText}`;
+    const stateText =
+      this.dataState === "loading"
+        ? `, ${this.strings.loading}`
+        : this.dataState === "partial"
+          ? `, ${this.strings.partial}`
+          : "";
+    const renderText =
+      renderedCount < visibleCount
+        ? `, ${renderedCount.toLocaleString(this.locale)} ${this.strings.rendered}`
+        : "";
+    this.status.textContent = `${modeText ? `${modeText}, ` : ""}${this.graph.receivedCount.toLocaleString(this.locale)} ${this.strings.received}, ${visibleCount.toLocaleString(this.locale)} ${this.strings.visible}, ${this.graph.excludedCount.toLocaleString(this.locale)} ${this.strings.excluded}${renderText}${boundedText}${stateText}${selectedText}`;
     this.emptyElement.hidden = this.graph.nodes.size > 0 && this.modeMessage.length === 0;
     this.emptyElement.textContent =
       this.modeMessage || (this.graph.nodes.size === 0 ? this.strings.noData : "");
@@ -641,6 +1059,10 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   private diagnosticFallback(item: Diagnostic): string {
     switch (item.code) {
       case "missing-required-fields":
+        return item.message;
+      case "invalid-cardinality":
+      case "invalid-data-shape":
+      case "partial-data":
         return item.message;
       case "empty-id":
         return "Rows with an empty NodeId were excluded.";
@@ -664,6 +1086,8 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         return item.message;
       case "depth-cap":
         return item.message;
+      case "render-cap":
+        return this.strings.renderCap;
       default:
         return item.message;
     }
@@ -687,7 +1111,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private onSearchInput = (): void => {
-    if (!this.formatting.enableSearch) {
+    if (!this.interactionsEnabled || !this.formatting.enableSearch) {
       return;
     }
     this.searchQuery = this.searchInput.value.trim();
@@ -702,6 +1126,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onNodeClick(id: string, event: MouseEvent): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     if (this.suppressNextClick) {
       this.suppressNextClick = false;
       return;
@@ -711,6 +1138,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private selectNode(id: string, multiSelect: boolean): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     if (!multiSelect) {
       this.selected.clear();
     }
@@ -728,11 +1158,11 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     } else if (selectionIds.length === 0 && manager.clear) {
       void manager.clear();
     }
-    this.render();
+    this.refreshSelectionState();
   }
 
   private selectDescendants(): void {
-    if (!this.formatting.enableDescendantSelection) {
+    if (!this.interactionsEnabled || !this.formatting.enableDescendantSelection) {
       return;
     }
     const activeId = this.focusedId ?? Array.from(this.selected)[0];
@@ -747,17 +1177,20 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     if (selectionIds.length > 0) {
       void this.runtimeSelectionManager().select?.(selectionIds, true);
     }
-    this.render();
+    this.refreshSelectionState();
   }
 
   private clearSelection(): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     this.selected.clear();
     void this.runtimeSelectionManager().clear?.();
-    this.render();
+    this.refreshSelectionState();
   }
 
   private toggleCollapsed(id: string): void {
-    if (!this.formatting.enableCollapse || !this.graph.nodes.get(id)?.children.length) {
+    if (!this.interactionsEnabled || !this.formatting.enableCollapse || !this.graph.nodes.get(id)?.children.length) {
       return;
     }
     if (this.collapsed.has(id)) {
@@ -770,6 +1203,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private onTreeItemKeyDown(id: string, event: KeyboardEvent): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     const visibleIds = flattenVisibleIds(this.graph, this.collapsed);
     const index = visibleIds.indexOf(id);
     let nextId: string | undefined;
@@ -812,7 +1248,23 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
         event.preventDefault();
         return;
       default:
-        return;
+        if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          this.typeaheadBuffer = `${this.typeaheadBuffer}${event.key}`.toLocaleLowerCase(this.locale);
+          if (this.typeaheadTimer) {
+            clearTimeout(this.typeaheadTimer);
+          }
+          this.typeaheadTimer = setTimeout(() => {
+            this.typeaheadBuffer = "";
+            this.typeaheadTimer = undefined;
+          }, 700);
+          nextId = flattenVisibleIds(this.graph, this.collapsed).find((candidate) => {
+            const candidateNode = this.graph.nodes.get(candidate);
+            return candidateNode?.label.toLocaleLowerCase(this.locale).startsWith(this.typeaheadBuffer);
+          });
+        }
+        if (!nextId) {
+          return;
+        }
     }
     if (nextId) {
       this.focusNode(nextId);
@@ -821,6 +1273,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private onRootKeyDown = (event: KeyboardEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     if (event.key === "Escape") {
       this.searchInput.value = "";
       this.searchQuery = "";
@@ -841,7 +1296,10 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private onCanvasContextMenu = (event: MouseEvent): void => {
-    if ((event.target as Element).closest?.("[data-node-id]")) {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    if ((event.target as Element).closest?.("[data-node-id], [data-semantic-node-id]")) {
       return;
     }
     event.preventDefault();
@@ -849,13 +1307,22 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onCanvasClick = (event: MouseEvent): void => {
-    if (!(event.target as Element).closest?.("[data-node-id]") && !(event.target as Element).closest?.(".atlyn-semantic-item")) {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    if (
+      !(event.target as Element).closest?.("[data-node-id]") &&
+      !(event.target as Element).closest?.("[data-semantic-node-id]")
+    ) {
       this.clearSelection();
     }
   };
 
   private onCanvasTouchStart = (event: TouchEvent): void => {
-    if ((event.target as Element).closest?.("[data-node-id]")) {
+    if (!this.interactionsEnabled) {
+      return;
+    }
+    if ((event.target as Element).closest?.("[data-node-id], [data-semantic-node-id]")) {
       return;
     }
     const touch = event.touches[0];
@@ -870,13 +1337,17 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onCanvasTouchEnd = (event: TouchEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     if (this.longPressTimer) {
       this.clearLongPress();
     }
     if (this.suppressNextClick) {
       event.preventDefault();
-      window.setTimeout(() => {
+      this.suppressedClickTimer = setTimeout(() => {
         this.suppressNextClick = false;
+        this.suppressedClickTimer = undefined;
       }, 0);
     }
   };
@@ -886,6 +1357,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onNodeTouchStart = (id: string, event: TouchEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) {
       return;
@@ -898,11 +1372,15 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onTouchEnd = (event: TouchEvent): void => {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     this.clearLongPress();
     if (this.suppressNextClick) {
       event.preventDefault();
-      window.setTimeout(() => {
+      this.suppressedClickTimer = setTimeout(() => {
         this.suppressNextClick = false;
+        this.suppressedClickTimer = undefined;
       }, 0);
     }
   };
@@ -919,6 +1397,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private showContextMenu(id: string | undefined, x: number, y: number): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     const selectionId = id
       ? this.selectionIds.get(id) ?? this.host.createSelectionIdBuilder().createSelectionId()
       : this.host.createSelectionIdBuilder().createSelectionId();
@@ -929,9 +1410,17 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   }
 
   private showTooltip(id: string, x: number, y: number, isTouchEvent: boolean): void {
+    if (!this.interactionsEnabled) {
+      return;
+    }
     const node = this.graph.nodes.get(id);
     const tooltipService = this.host.tooltipService;
-    if (!node || !tooltipService || typeof tooltipService.show !== "function") {
+    if (
+      !node ||
+      !tooltipService ||
+      typeof tooltipService.show !== "function" ||
+      (typeof tooltipService.enabled === "function" && !tooltipService.enabled())
+    ) {
       return;
     }
     const dataItems = [
@@ -958,6 +1447,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       coordinates: [x, y],
       isTouchEvent
     });
+    this.tooltipNodeId = id;
   }
 
   private hideTooltip(): void {
@@ -965,6 +1455,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     if (tooltipService && typeof tooltipService.hide === "function") {
       tooltipService.hide({ immediately: true, isTouchEvent: false });
     }
+    this.tooltipNodeId = null;
   }
 
   private showRenderFailure(error: unknown): void {
@@ -1033,7 +1524,11 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       matrixUnsupported: this.localize("UI_MatrixUnsupported", localized.matrixUnsupported),
       boundedContract: this.localize("UI_BoundedContract", localized.boundedContract),
       tableMode: this.localize("UI_TableMode", localized.tableMode),
-      matrixMode: this.localize("UI_MatrixMode", localized.matrixMode)
+      matrixMode: this.localize("UI_MatrixMode", localized.matrixMode),
+      loading: this.localize("UI_Loading", localized.loading),
+      partial: this.localize("UI_Partial", localized.partial),
+      rendered: this.localize("UI_Rendered", localized.rendered),
+      renderCap: this.localize("UI_RenderCap", localized.renderCap)
     };
     this.root.setAttribute("aria-label", this.strings.visualName);
     this.searchLabel.textContent = `${this.strings.searchLabel}:`;
@@ -1073,6 +1568,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       : this.formatting.selectedColor;
     this.root.dir = this.direction;
     this.root.dataset.highContrast = String(highContrast);
+    this.root.dataset.interactionsDisabled = String(!this.interactionsEnabled);
     const reducedMotion =
       this.formatting.reducedMotion ||
       (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1091,5 +1587,8 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.root.style.setProperty("--atlyn-label-size", `${this.formatting.fontSize}px`);
     this.root.style.setProperty("--atlyn-subtitle-size", `${this.formatting.subtitleFontSize}px`);
     this.root.style.setProperty("--atlyn-edge-width", String(highContrast ? Math.max(2, this.formatting.edgeWidth) : this.formatting.edgeWidth));
+    this.searchInput.disabled = !this.interactionsEnabled || !this.formatting.enableSearch;
+    this.selectDescendantsButton.disabled = !this.interactionsEnabled || this.selected.size === 0;
+    this.clearSelectionButton.disabled = !this.interactionsEnabled || this.selected.size === 0;
   }
 }

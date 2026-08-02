@@ -1,5 +1,6 @@
 const tsParser = require("@typescript-eslint/parser");
 const tsPlugin = require("@typescript-eslint/eslint-plugin");
+const powerBiPlugin = require("eslint-plugin-powerbi-visuals");
 
 module.exports = [
   {
@@ -28,14 +29,22 @@ module.exports = [
       }
     },
     plugins: {
-      "@typescript-eslint": tsPlugin
+      "@typescript-eslint": tsPlugin,
+      "powerbi-visuals": powerBiPlugin
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...powerBiPlugin.configs.recommended.rules,
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "no-console": "error"
+    }
+  },
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "powerbi-visuals/non-literal-fs-path": "off"
     }
   }
 ];

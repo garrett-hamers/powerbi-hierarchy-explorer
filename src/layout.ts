@@ -1,4 +1,4 @@
-import { GraphModel } from "./graph";
+import { GraphModel, HierarchyNode } from "./graph";
 
 export interface LayoutOptions {
   width: number;
@@ -9,6 +9,9 @@ export interface LayoutOptions {
   horizontalGap?: number;
   verticalGap?: number;
   padding?: number;
+  fitContent?: boolean;
+  fontSize?: number;
+  subtitleFontSize?: number;
 }
 
 export interface LayoutPoint {
@@ -26,46 +29,117 @@ export interface LayoutResult {
   height: number;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function nodeWidth(node: HierarchyNode, options: LayoutOptions): number {
+  const minimum = Math.max(96, options.nodeWidth ?? 156);
+  if (options.fitContent === false) {
+    return minimum;
+  }
+  const fontSize = Math.max(8, options.fontSize ?? 12);
+  const subtitleSize = Math.max(7, options.subtitleFontSize ?? 10);
+  const longestText = Math.max(node.label.length * fontSize * 0.58, node.subtitle.length * subtitleSize * 0.58);
+  return clamp(Math.ceil(longestText + 24), minimum, minimum * 2.5);
+}
+
 /**
- * A bounded, deterministic grid layout. It avoids force simulation and has no
- * hidden work proportional to anything outside the visible forest.
+ * Places each parent over the center of its visible children using a
+ * deterministic tidy-tree pass. The input is already capped and sorted by the
+ * graph normalizer, so this remains bounded for wide and deep forests.
  */
 export function computeLayout(
   graph: GraphModel,
   visibleIds: readonly string[],
   options: LayoutOptions
 ): LayoutResult {
-  const nodeWidth = Math.max(96, options.nodeWidth ?? 156);
   const nodeHeight = Math.max(32, options.nodeHeight ?? 48);
   const horizontalGap = Math.max(12, options.horizontalGap ?? 38);
   const verticalGap = Math.max(8, options.verticalGap ?? 14);
   const padding = Math.max(4, options.padding ?? 12);
-  const width = Math.max(
-    Math.max(160, options.width),
-    padding * 2 + (graph.maxDepth + 1) * nodeWidth + graph.maxDepth * horizontalGap
-  );
-  const height = Math.max(
-    Math.max(150, options.height),
-    padding * 2 + visibleIds.length * nodeHeight + Math.max(0, visibleIds.length - 1) * verticalGap
-  );
-  const points = new Map<string, LayoutPoint>();
   const direction = options.direction ?? "ltr";
+  const visible = new Set(visibleIds);
+  const points = new Map<string, LayoutPoint>();
+  const widths = new Map<string, number>();
+  const depthWidths = new Map<number, number>();
+  let maxDepth = 0;
 
-  visibleIds.forEach((id, index) => {
+  visibleIds.forEach((id) => {
     const node = graph.nodes.get(id);
     if (!node) {
       return;
     }
-    const ltrX = padding + node.depth * (nodeWidth + horizontalGap);
-    const x = direction === "rtl" ? width - ltrX - nodeWidth : ltrX;
+    const width = nodeWidth(node, options);
+    widths.set(id, width);
+    depthWidths.set(node.depth, Math.max(depthWidths.get(node.depth) ?? 0, width));
+    maxDepth = Math.max(maxDepth, node.depth);
+  });
+
+  const depthX = new Map<number, number>();
+  let nextX = padding;
+  for (let depth = 0; depth <= maxDepth; depth += 1) {
+    depthX.set(depth, nextX);
+    nextX += (depthWidths.get(depth) ?? Math.max(96, options.nodeWidth ?? 156)) + horizontalGap;
+  }
+  const contentWidth = Math.max(
+    Math.max(160, options.width),
+    nextX - horizontalGap + padding
+  );
+
+  const visibleChildren = (id: string): string[] =>
+    (graph.nodes.get(id)?.children ?? []).filter((child) => visible.has(child));
+  const visibleRoots = visibleIds.filter((id) => {
+    const parentId = graph.nodes.get(id)?.parentId;
+    return !parentId || !visible.has(parentId);
+  });
+  const yById = new Map<string, number>();
+  let cursorY = padding;
+  const place = (id: string): number => {
+    const children = visibleChildren(id);
+    let y: number;
+    if (children.length === 0) {
+      y = cursorY;
+      cursorY += nodeHeight + verticalGap;
+    } else {
+      const childCenters = children.map((child) => place(child) + nodeHeight / 2);
+      y = (childCenters[0] + childCenters[childCenters.length - 1]) / 2 - nodeHeight / 2;
+      if (y < padding) {
+        y = padding;
+      }
+    }
+    yById.set(id, y);
+    return y;
+  };
+  visibleRoots.forEach((rootId, index) => {
+    place(rootId);
+    if (index < visibleRoots.length - 1) {
+      cursorY += verticalGap;
+    }
+  });
+
+  const contentHeight = Math.max(
+    Math.max(150, options.height),
+    (cursorY > padding ? cursorY - verticalGap : padding) + padding
+  );
+  visibleIds.forEach((id) => {
+    const node = graph.nodes.get(id);
+    const y = yById.get(id);
+    if (!node || y === undefined) {
+      return;
+    }
+    const width = widths.get(id) ?? Math.max(96, options.nodeWidth ?? 156);
+    const ltrX = depthX.get(node.depth) ?? padding;
+    const x = direction === "rtl" ? contentWidth - ltrX - width : ltrX;
     points.set(id, {
       id,
       x,
-      y: padding + index * (nodeHeight + verticalGap),
-      width: nodeWidth,
+      y,
+      width,
       height: nodeHeight,
       depth: node.depth
     });
   });
-  return { points, width, height };
+
+  return { points, width: contentWidth, height: contentHeight };
 }

@@ -20,7 +20,9 @@ describe("API 5.1 formatting model", () => {
             direction: "rtl",
             nodeWidth: 500,
             nodeHeight: 64,
-            horizontalGap: 44
+            horizontalGap: 44,
+            zoom: 4,
+            fitContent: false
           },
           colors: {
             backgroundColor: { solid: { color: "#111111" } },
@@ -40,6 +42,8 @@ describe("API 5.1 formatting model", () => {
     expect(values.nodeWidth).toBe(320);
     expect(values.nodeHeight).toBe(64);
     expect(values.horizontalGap).toBe(44);
+    expect(values.zoom).toBe(2.5);
+    expect(values.fitContent).toBe(false);
     expect(values.backgroundColor).toBe("#111111");
     expect(values.nodeColor).toBe(DEFAULT_FORMATTING.nodeColor);
     expect(values.fontFamily).toBe(DEFAULT_FORMATTING.fontFamily);
@@ -64,6 +68,8 @@ describe("API 5.1 formatting model", () => {
     expect(descriptors).toEqual(
       expect.arrayContaining([
         { objectName: "layout", propertyName: "direction" },
+        { objectName: "layout", propertyName: "zoom" },
+        { objectName: "layout", propertyName: "fitContent" },
         { objectName: "colors", propertyName: "nodeColor" },
         { objectName: "typography", propertyName: "fontFamily" },
         { objectName: "edges", propertyName: "edgeWidth" },

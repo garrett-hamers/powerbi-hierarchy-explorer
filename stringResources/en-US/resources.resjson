@@ -18,6 +18,8 @@
   "Format_HorizontalGap": "Horizontal spacing",
   "Format_VerticalGap": "Vertical spacing",
   "Format_Padding": "Canvas padding",
+  "Format_Zoom": "Zoom",
+  "Format_FitContent": "Fit labels to content",
   "Format_Colors_Card": "Colors",
   "Format_Colors_Nodes": "Nodes",
   "Format_Background": "Background",
@@ -76,7 +78,13 @@
   "UI_BoundedContract": "bounded table contract active",
   "UI_TableMode": "Table mode",
   "UI_MatrixMode": "Matrix mode",
+  "UI_Loading": "loading more data",
+  "UI_Partial": "partial data",
+  "UI_Rendered": "rendered",
+  "UI_RenderCap": "The visible hierarchy is capped for responsiveness; collapse or search to reach additional nodes.",
   "Diagnostic_missing-required-fields": "Required hierarchy fields are missing.",
+  "Diagnostic_invalid-cardinality": "The field mapping exceeds the supported cardinality.",
+  "Diagnostic_invalid-data-shape": "The table contains an unsupported or malformed data shape.",
   "Diagnostic_empty-id": "Rows with an empty NodeId were excluded.",
   "Diagnostic_empty-label": "Nodes with an empty Label use an accessible fallback label.",
   "Diagnostic_duplicate-id": "Duplicate NodeId values were received; the first table row is retained.",
@@ -87,5 +95,6 @@
   "Diagnostic_multiple-roots": "Multiple roots form a valid forest and are rendered side-by-side.",
   "Diagnostic_data-reduction": "The table is rendered under the bounded contract.",
   "Diagnostic_node-cap": "The node cap excluded additional nodes.",
-  "Diagnostic_depth-cap": "The depth cap excluded descendants."
+  "Diagnostic_depth-cap": "The depth cap excluded descendants.",
+  "Diagnostic_partial-data": "Only the currently received table segment is rendered; additional rows may still be loading."
 }

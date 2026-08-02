@@ -15,10 +15,12 @@ behavior. Matrix mode is intentionally not implemented.
 
 Rows are sorted deterministically by NodeId within each forest component. The
 visual does not provide drill or host-driven expand operations; collapse and
-expand are local view state, and descendant selection is explicit. Table
-segments are not fetched progressively: the visual exposes a visible 30,000-row
-bounded contract and reports segment/reduction diagnostics rather than claiming
-that an incomplete parent-child graph is complete.
+expand are local view state, and descendant selection is explicit. Segmented
+table data is accumulated with stable source identities and requests at most 32
+additional segments through the documented `fetchMoreData(false)` contract.
+Partial/loading state and a 30,000-row bounded contract remain visible, and
+rendering is capped at 2,000 visible nodes with search prioritization so large
+forests stay responsive.
 
 Formatting uses the API 5.1+ formatting model for direction, node geometry,
 colors, typography, edges, interaction behavior, diagnostics, and persisted
@@ -36,7 +38,9 @@ certification or substitute for validation in a real Power BI host.
 npm ci
 npm test
 npm run typecheck
-npm run lint
+npm run eslint
+npm test
 npm run package
-npm audit --audit-level=high
+npm run certification-audit
+npm audit
 ```

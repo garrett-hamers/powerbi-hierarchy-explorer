@@ -226,6 +226,91 @@ describe("Visual interactions and lifecycle", () => {
     matrixResult.visual.destroy();
   });
 
+  test("accumulates host segments and requests more data under a bounded contract", () => {
+    const { host } = makeHost();
+    const fetchMoreData = jest.fn().mockReturnValue(true);
+    (host as any).fetchMoreData = fetchMoreData;
+    const first = tableDataView([["a", null, "A", "", "first"]]);
+    (first as any).metadata = { segment: { objects: [] } };
+    const result = updateVisual(host, first);
+
+    expect(fetchMoreData).toHaveBeenCalledWith(false);
+    expect(result.element.textContent).toContain("loading more data");
+
+    const second = tableDataView([["b", "a", "B", "", "second"]]);
+    result.visual.update({ dataViews: [second], viewport: { width: 400, height: 300 }, operationKind: 1 } as any);
+    expect(result.element.querySelectorAll('[role="treeitem"]')).toHaveLength(2);
+    expect(result.element.querySelector('[data-semantic-node-id="b"]')).not.toBeNull();
+    result.visual.destroy();
+  });
+
+  test("rejects invalid required cardinality and exposes a diagnostic", () => {
+    const { host } = makeHost();
+    const invalid = {
+      table: {
+        columns: [
+          { displayName: "Node 1", roles: { NodeId: true } },
+          { displayName: "Node 2", roles: { NodeId: true } },
+          { displayName: "Parent", roles: { ParentId: true } },
+          { displayName: "Label", roles: { Label: true } }
+        ],
+        rows: [["a", "a", null, "A"]]
+      }
+    };
+    const result = updateVisual(host, invalid);
+
+    expect(result.element.querySelectorAll('[role="treeitem"]')).toHaveLength(0);
+    expect(result.element.textContent).toContain("NodeId accepts at most 1 field");
+    result.visual.destroy();
+  });
+
+  test("gates host interactions and completes the tooltip lifecycle", () => {
+    const { host, selectionManager } = makeHost();
+    const tooltipService = host.tooltipService as any;
+    tooltipService.enabled = jest.fn().mockReturnValue(true);
+    tooltipService.move = jest.fn();
+    (host as any).hostCapabilities = { allowInteractions: false };
+    const disabled = updateVisual(host, tableDataView());
+    const disabledNode = disabled.element.querySelector('[data-node-id="a"]') as Element;
+    disabledNode.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    disabledNode.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true, clientX: 1, clientY: 2 }));
+    expect(disabled.element.querySelector('[role="tree"]')?.getAttribute("aria-disabled")).toBe("true");
+    expect(selectionManager.select).not.toHaveBeenCalled();
+    expect(tooltipService.show).not.toHaveBeenCalled();
+    disabled.visual.destroy();
+
+    const enabledHost = makeHost().host;
+    const enabledTooltip = enabledHost.tooltipService as any;
+    enabledTooltip.enabled = jest.fn().mockReturnValue(true);
+    enabledTooltip.move = jest.fn();
+    const enabled = updateVisual(enabledHost, tableDataView());
+    const enabledNode = enabled.element.querySelector('[data-node-id="a"]') as Element;
+    enabledNode.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true, clientX: 1, clientY: 2 }));
+    enabledNode.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 3, clientY: 4 }));
+    enabledNode.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    expect(enabledTooltip.show).toHaveBeenCalled();
+    expect(enabledTooltip.move).toHaveBeenCalledWith(
+      expect.objectContaining({ coordinates: [3, 4], isTouchEvent: false })
+    );
+    expect(enabledTooltip.hide).toHaveBeenCalled();
+    enabled.visual.destroy();
+  });
+
+  test("restores semantic focus after a data rerender", () => {
+    const { host } = makeHost();
+    const result = updateVisual(host, tableDataView());
+    document.body.appendChild(result.element);
+    const item = result.element.querySelector('[data-semantic-node-id="b"]') as HTMLElement;
+    item.focus();
+    result.visual.update({ dataViews: [tableDataView()], viewport: { width: 400, height: 300 } } as any);
+    const refreshed = result.element.querySelector('[data-semantic-node-id="b"]') as HTMLElement;
+
+    expect(refreshed.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(refreshed);
+    result.visual.destroy();
+    result.element.remove();
+  });
+
   test("opens context menus from touch long press", () => {
     jest.useFakeTimers();
     try {
@@ -237,6 +322,24 @@ describe("Visual interactions and lifecycle", () => {
       node.dispatchEvent(start);
       jest.advanceTimersByTime(550);
       expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "row-0" }, { x: 7, y: 8 });
+      visual.destroy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("does not open an empty-space menu for semantic-tree long press", () => {
+    jest.useFakeTimers();
+    try {
+      const { host, selectionManager } = makeHost();
+      const { element, visual } = updateVisual(host, tableDataView());
+      const node = element.querySelector('[data-semantic-node-id="a"]') as Element;
+      const start = new Event("touchstart", { bubbles: true });
+      Object.defineProperty(start, "touches", { value: [{ clientX: 9, clientY: 10 }] });
+      node.dispatchEvent(start);
+      jest.advanceTimersByTime(550);
+      expect(selectionManager.showContextMenu).toHaveBeenCalledTimes(1);
+      expect(selectionManager.showContextMenu).toHaveBeenCalledWith({ key: "row-0" }, { x: 9, y: 10 });
       visual.destroy();
     } finally {
       jest.useRealTimers();
