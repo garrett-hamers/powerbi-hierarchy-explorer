@@ -38,7 +38,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: atlyn-hierarchy-explorer-package
-          path: dist/*.pbiviz
+          path: |
+            dist/*.pbiviz
+            dist/release-manifest.json
           if-no-files-found: error
       - name: Certification audit
         run: npm run certification-audit
