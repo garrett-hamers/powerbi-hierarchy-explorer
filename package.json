@@ -10,14 +10,16 @@
   "scripts": {
     "build": "npm run package",
     "clean-package": "node scripts/clean-package-artifacts.cjs",
-    "package": "npm run clean-package && pbiviz package && npm run verify-package",
+    "package": "npm run clean-package && pbiviz package && npm run normalize-package && npm run verify-package && npm run release-manifest",
+    "normalize-package": "node scripts/normalize-package.cjs",
     "verify-package": "node scripts/verify-package.cjs",
+    "release-manifest": "node scripts/write-release-manifest.cjs",
     "start": "pbiviz start",
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit",
     "eslint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint": "npm run eslint",
-    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts && npm run verify-package",
+    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts && npm run verify-package && npm run release-manifest",
     "audit": "npm audit"
   },
   "dependencies": {
