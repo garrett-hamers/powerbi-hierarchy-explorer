@@ -41,6 +41,7 @@ npm run typecheck
 npm run eslint
 npm test
 npm run package
+npm run verify-reproducible-package
 npm run certification-audit
 npm audit
 ```

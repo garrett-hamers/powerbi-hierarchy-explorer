@@ -1,49 +1,74 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const JSZip = require("jszip");
 
 const root = path.resolve(__dirname, "..");
-const packageFiles = fs.readdirSync(path.join(root, "dist")).filter((file) => file.endsWith(".pbiviz"));
+const packageFiles = fs
+  .readdirSync(path.join(root, "dist"))
+  .filter((file) => file.endsWith(".pbiviz"));
 
 if (packageFiles.length !== 1) {
-  throw new Error("expected exactly one .pbiviz package to normalize");
+  throw new Error(`expected exactly one package to normalize, found ${packageFiles.length}`);
 }
 
 const packagePath = path.join(root, "dist", packageFiles[0]);
-const archive = fs.readFileSync(packagePath);
-const localHeader = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
-const centralHeader = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
-const endOfCentralDirectory = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
-const fixedTime = 0;
-const fixedDate = 33;
+const fixedDate = new Date("1980-01-01T00:00:00.000Z");
+const compressionOptions = { level: 9 };
 
-let offset = 0;
-while (offset < archive.length && archive.subarray(offset, offset + 4).equals(localHeader)) {
-  archive.writeUInt16LE(fixedTime, offset + 10);
-  archive.writeUInt16LE(fixedDate, offset + 12);
-  const fileNameLength = archive.readUInt16LE(offset + 26);
-  const extraLength = archive.readUInt16LE(offset + 28);
-  const compressedSize = archive.readUInt32LE(offset + 18);
-  offset += 30 + fileNameLength + extraLength + compressedSize;
-}
+async function normalizePackage() {
+  const source = await fs.promises.readFile(packagePath);
+  const sourceZip = await JSZip.loadAsync(source);
+  const entries = [];
 
-const endOffset = archive.lastIndexOf(endOfCentralDirectory);
-if (endOffset < 0) {
-  throw new Error("missing ZIP end-of-central-directory record");
-}
+  sourceZip.forEach((name, entry) => {
+    entries.push({ entry, name });
+  });
+  entries.sort((left, right) =>
+    Buffer.compare(Buffer.from(left.name, "utf8"), Buffer.from(right.name, "utf8"))
+  );
 
-const centralOffset = archive.readUInt32LE(endOffset + 16);
-const entryCount = archive.readUInt16LE(endOffset + 10);
-offset = centralOffset;
-for (let index = 0; index < entryCount; index += 1) {
-  if (!archive.subarray(offset, offset + 4).equals(centralHeader)) {
-    throw new Error(`invalid ZIP central-directory entry at offset ${offset}`);
+  const normalizedZip = new JSZip();
+  for (const { entry, name } of entries) {
+    normalizedZip.file(name, await entry.async("nodebuffer"), {
+      date: fixedDate,
+      dir: entry.dir,
+      createFolders: false,
+      compression: "DEFLATE",
+      compressionOptions,
+      dosPermissions: entry.dir ? 0x10 : 0,
+    });
   }
-  archive.writeUInt16LE(fixedTime, offset + 12);
-  archive.writeUInt16LE(fixedDate, offset + 14);
-  const fileNameLength = archive.readUInt16LE(offset + 28);
-  const extraLength = archive.readUInt16LE(offset + 30);
-  const commentLength = archive.readUInt16LE(offset + 32);
-  offset += 46 + fileNameLength + extraLength + commentLength;
+
+  const normalized = await normalizedZip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+    compressionOptions,
+    platform: "DOS",
+    streamFiles: false,
+    comment: "",
+  });
+  const temporaryPath = path.join(
+    path.dirname(packagePath),
+    `${path.basename(packagePath)}.${process.pid}.${Date.now()}.tmp`
+  );
+
+  try {
+    const handle = await fs.promises.open(temporaryPath, "wx");
+    try {
+      await handle.writeFile(normalized);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.promises.rename(temporaryPath, packagePath);
+  } finally {
+    await fs.promises.rm(temporaryPath, { force: true });
+  }
+
+  console.log(`Normalized ${packageFiles[0]} (${normalized.length} bytes)`);
 }
 
-fs.writeFileSync(packagePath, archive);
+normalizePackage().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

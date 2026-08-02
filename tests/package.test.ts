@@ -46,14 +46,21 @@ describe("certification-first package contract", () => {
     expect(fs.existsSync(path.join(root, "RELEASE.md"))).toBe(true);
     expect(packageJson.scripts.eslint).toBe("eslint . --ext .js,.jsx,.ts,.tsx");
     expect(packageJson.scripts.audit).toBe("npm audit");
-    expect(packageJson.scripts.package).toContain("npm run clean-package && pbiviz package");
-    expect(packageJson.scripts.package).toContain("npm run normalize-package");
+    expect(packageJson.scripts.package).toContain(
+      "npm run clean-package && pbiviz package && npm run normalize-package"
+    );
+    expect(packageJson.scripts["normalize-package"]).toBe("node scripts/normalize-package.cjs");
     expect(packageJson.scripts["certification-audit"]).toContain("npm run verify-package");
+    expect(packageJson.scripts["certification-audit"]).toContain("npm run verify-reproducible-package");
     expect(packageJson.scripts["clean-package"]).toBe("node scripts/clean-package-artifacts.cjs");
     expect(packageJson.scripts["normalize-package"]).toBe("node scripts/normalize-package.cjs");
     expect(packageJson.scripts["verify-package"]).toBe("node scripts/verify-package.cjs");
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
+    expect(packageJson.scripts["verify-reproducible-package"]).toBe(
+      "node scripts/verify-reproducible-package.cjs"
+    );
     expect(packageJson.devDependencies["eslint-plugin-powerbi-visuals"]).toBe("1.1.1");
+    expect(packageJson.devDependencies.jszip).toBe("3.10.1");
     expect(packageJson.dependencies["powerbi-visuals-api"]).toBe("5.11.0");
     expect(packageJson.devDependencies["powerbi-visuals-tools"]).toBe("7.2.1");
     expect(packageJson.overrides.uuid).toBe("11.1.1");

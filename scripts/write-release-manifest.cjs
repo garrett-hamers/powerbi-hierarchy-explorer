@@ -26,7 +26,8 @@ const releaseManifest = {
   sourceCommit,
   visualGuid: sourceManifest.visual.guid,
   visualVersion: sourceManifest.visual.version,
-  hashPolicy: "SHA-256 of the normalized .pbiviz ZIP; all local and central ZIP entry timestamps are fixed to 1980-01-01T00:00:00Z."
+  hashPolicy:
+    "SHA-256 of the normalized .pbiviz ZIP; entries are sorted and use fixed timestamps, DOS permissions, DOS platform, and DEFLATE level 9."
 };
 
 fs.writeFileSync(
