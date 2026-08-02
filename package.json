@@ -8,14 +8,16 @@
     "uuid": "11.1.1"
   },
   "scripts": {
-    "build": "pbiviz package",
-    "package": "pbiviz package",
+    "build": "npm run package",
+    "clean-package": "node scripts/clean-package-artifacts.cjs",
+    "package": "npm run clean-package && pbiviz package && npm run verify-package",
+    "verify-package": "node scripts/verify-package.cjs",
     "start": "pbiviz start",
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit",
-    "eslint": "npx eslint . --ext .js,.jsx,.ts,.tsx",
+    "eslint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint": "npm run eslint",
-    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts",
+    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts && npm run verify-package",
     "audit": "npm audit"
   },
   "dependencies": {

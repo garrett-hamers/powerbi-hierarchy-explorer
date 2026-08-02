@@ -20,3 +20,6 @@
 4. Describe host assumptions and limitations in the pull request. Passing
    local gates is not a claim of Microsoft certification or live-host
    validation.
+
+Release packaging and the post-merge certification snapshot are documented in
+[`RELEASE.md`](RELEASE.md).
