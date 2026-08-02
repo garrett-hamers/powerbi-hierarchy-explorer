@@ -14,23 +14,23 @@ packages are intentionally not committed.
    npm run typecheck
    npm run eslint
    npm run package
+   npm run verify-reproducible-package
    npm run certification-audit
    npm audit
    ```
 
    `npm run package` removes prior package output, creates one fresh
-   `dist/*.pbiviz`, and verifies its generated manifest against the source
-   capabilities, dependencies, and stable metadata.
-3. `npm run package` normalizes all local and central ZIP entry timestamps to
-   `1980-01-01T00:00:00Z`, verifies those normalized fields, and writes
-   `dist/release-manifest.json`. The manifest records the package filename,
-   byte length, uppercase SHA-256, source commit, visual GUID/version, and the
-   normalization policy. The SHA-256 is therefore the hash of the normalized
-   `.pbiviz` ZIP, not an unnormalized tool output.
-4. Record `dist/release-manifest.json` with the `.pbiviz` artifact when
+   `dist/*.pbiviz`, normalizes ZIP entry order, timestamps, permissions,
+   platform, and compression, and verifies its generated manifest against the
+   source capabilities, dependencies, and stable metadata. It also writes
+   `dist/release-manifest.json` with the package filename, byte length,
+   uppercase SHA-256, source commit, visual GUID/version, and normalization
+   policy. The reproducibility gate runs two clean packages and requires
+   identical bytes and SHA-256.
+3. Record `dist/release-manifest.json` with the `.pbiviz` artifact when
    publishing to immutable Blob/AppSource storage. Rebuilds from identical
    source and locked dependencies must produce the same package hash.
-5. After the final change is merged to `main`, create the lowercase
+4. After the final change is merged to `main`, create the lowercase
    `certification` branch from that exact commit when a reviewer needs a
    submission snapshot.
 

@@ -34,6 +34,8 @@ jobs:
         run: npm test
       - name: Package
         run: npm run package
+      - name: Reproducibility
+        run: npm run verify-reproducible-package
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
