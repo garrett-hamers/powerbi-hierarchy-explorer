@@ -1,0 +1,109 @@
+{
+  "privileges": [],
+  "supportsKeyboardFocus": true,
+  "supportsHighlight": true,
+  "supportsLandingPage": true,
+  "supportsEmptyDataView": true,
+  "supportsMultiVisualSelection": true,
+  "keepAllMetadataColumns": true,
+  "tooltips": {
+    "roles": [
+      "Tooltips"
+    ],
+    "supportedTypes": {
+      "default": true,
+      "canvas": true
+    },
+    "supportEnhancedTooltips": true
+  },
+  "dataReductionCustomization": {
+    "table": {
+      "rowCount": {
+        "defaultValue": 30000
+      }
+    }
+  },
+  "dataRoles": [
+    {
+      "displayName": "Node ID",
+      "name": "NodeId",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Parent ID",
+      "name": "ParentId",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Label",
+      "name": "Label",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Subtitle",
+      "name": "Subtitle",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Category",
+      "name": "Category",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Value",
+      "name": "Value",
+      "kind": "Measure"
+    },
+    {
+      "displayName": "Tooltips",
+      "name": "Tooltips",
+      "kind": "GroupingOrMeasure"
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "table": {
+        "rows": {
+          "select": [
+            {
+              "for": {
+                "in": "NodeId"
+              }
+            },
+            {
+              "for": {
+                "in": "ParentId"
+              }
+            },
+            {
+              "for": {
+                "in": "Label"
+              }
+            },
+            {
+              "for": {
+                "in": "Subtitle"
+              }
+            },
+            {
+              "for": {
+                "in": "Category"
+              }
+            },
+            {
+              "for": {
+                "in": "Value"
+              }
+            },
+            {
+              "for": {
+                "in": "Tooltips"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "objects": {}
+}
