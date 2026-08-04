@@ -144,8 +144,15 @@ What *has* been established:
 | No `publicCustomVisuals`, no connector or URL string in the model | test |
 | The report definition version is `2.0.0` | Confirmed against real published PBIR reports |
 | Schema URLs, versions, `visual.json` key sets and TMDL layout | Cross-checked against the peer Atlyn sample in the sibling `powerbi-scatter-chart` repository |
+| A PBIP opens with empty tables until refreshed, so the `.pbix` needs **Home > Refresh > Schema and data** first | Observed in Power BI Desktop on the peer Atlyn sample, which is generated the same way. See section 3 |
 
-That last row is **consistency evidence, not loadability evidence**. It shows
+That last row is the one piece of **Desktop-observed** evidence here, and it was
+observed on the peer project rather than on this one. It is reported because the
+behaviour is a property of the PBIP format itself - a PBIP carries no data cache
+- rather than of any one project, so it applies to this sample too. It still is
+not evidence that *this* project loads.
+
+The row above it is **consistency evidence, not loadability evidence**. It shows
 this project agrees with a peer project generated the same way; it does not show
 that either one opens. Treat the first Desktop open as the verification step it
 is, and if it reports a blocking error, the file it names is the thing to fix.
@@ -155,7 +162,9 @@ is, and if it reports a blocking error, the file it names is the thing to fix.
 - The data is a **DAX calculated table** built with `DATATABLE`, not a Power
   Query partition. A calculated table has **no data source at all**, so nothing
   can prompt for credentials, there is no privacy-level or formula-firewall
-  surface, and the report carries no refresh dependency.
+  surface, and the report has no *external* refresh dependency. The one refresh
+  it does need - materialising the table when producing the `.pbix`, per section
+  3 - is a pure engine recalculation that reaches nothing outside the model.
   `tests/sample-report.test.ts` asserts the partition is `= calculated`, that no
   Power Query construct survives, and that no connector or URL string appears
   anywhere in the model.
@@ -199,7 +208,7 @@ pbi-tools 1.2.0 is incompatible with the Desktop 2.150.2102.0 packaging API. Its
 this repository depends on it. The native PBIP folder format used here needs no
 third-party tooling at all: Power BI Desktop opens the `.pbip` directly.
 
-### The one manual step: producing the .pbix
+### The manual step: producing the .pbix
 
 A `.pbix` cannot be generated outside Power BI Desktop. Its model is stored as a
 binary Analysis Services backup image - the same reason `pbi-tools compile`
@@ -210,15 +219,25 @@ So the project is committed and the `.pbix` is produced once, by hand:
    features** and enable **Power BI Project (.pbip) save option** and **Store
    reports using enhanced metadata format (PBIR)**. Restart Desktop. Both are
    still preview features.
-2. Open `samples/AtlynHierarchyExplorerSample.pbip`.
-3. Let the model load. There is no data source, so there must be no credential
-   prompt and no refresh step; the calculated table is evaluated by the engine.
-   If Desktop asks for credentials, something external crept into the model and
-   the sample is no longer valid.
-4. Confirm the visual renders the hierarchy on the **Hierarchy overview** page.
-5. **File > Save As** and choose `.pbix`. Keep it outside the repository - the
+2. Open `samples/AtlynHierarchyExplorerSample.pbip`. Desktop is expected to
+   report *"Some of the tables have incomplete or no data."* A PBIP stores the
+   model definition and **caches no data**, so the calculated table has not been
+   materialised yet. This is not a fault in the project.
+3. **Required: run Home > Refresh > Schema and data.** This is not optional and
+   not a formality. Until the model is processed the tables are empty, and a
+   `.pbix` saved before this step ships with **empty tables** - which fails
+   AppSource review, because demonstrating the visual with data is the only
+   thing the sample report is for.
+4. **During that refresh, Desktop must not prompt for credentials.** The data is
+   a DAX calculated table with no data source, so the refresh is a pure engine
+   recalculation with nothing to authenticate against. A credential prompt means
+   something external crept into the model and the sample is no longer offline:
+   stop, fix the model, and regenerate with `npm run sample-report`.
+5. Confirm the visual renders the hierarchy on the **Hierarchy overview** page,
+   with node labels and values visible rather than empty cards.
+6. **File > Save As** and choose `.pbix`. Keep it outside the repository - the
    `.pbix` is a build output and is deliberately not committed.
-6. Upload that `.pbix` to Partner Center as the sample report.
+7. Upload that `.pbix` to Partner Center as the sample report.
 
 Desktop may normalise the project files when it saves. That is expected; rerun
 `npm run sample-report` to restore the canonical generated state. Opening the
@@ -277,10 +296,12 @@ npm run screenshots
 These cannot be completed from this repository and are not simulated here.
 
 1. **Produce the sample `.pbix`** by opening
-   `samples/AtlynHierarchyExplorerSample.pbip` in Power BI Desktop and doing
-   *Save As* - the full procedure is in section 3. The project, its offline data
-   and the embedded visual are already built and validated; only this one
-   Desktop step is left.
+   `samples/AtlynHierarchyExplorerSample.pbip` in Power BI Desktop, running
+   **Home > Refresh > Schema and data**, and then doing *Save As* - the full
+   procedure is in section 3. The refresh is required, not optional: a PBIP
+   caches no data, so saving without it produces a `.pbix` with empty tables that
+   would fail AppSource review. The project, its offline data and the embedded
+   visual are already built and validated; only this Desktop step is left.
 2. **Create or confirm the Partner Center account** and complete publisher
    verification for Atlyn.
 3. **Upload** `dist/atlynHierarchyExplorer.1.0.1.0.pbiviz` from a clean
@@ -297,5 +318,6 @@ These cannot be completed from this repository and are not simulated here.
 
 `scripts/validate-publication-assets.cjs` cross-checks this document against
 `pbiviz.json` on every build and fails if the support URL, privacy policy URL,
-GUID, version, EULA path, free-listing decision or sample project path recorded
-above stops matching the repository. Update both together.
+GUID, version, EULA path, free-listing decision, sample project path, or the
+**Home > Refresh > Schema and data** step recorded above stops matching the
+repository. Update both together.

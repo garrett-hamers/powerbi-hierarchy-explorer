@@ -11,6 +11,8 @@
  *     1024 KB
  *   - the support and privacy policy URLs are https
  *   - an EULA file is present
+ *   - the dossier records the offline sample project and the model refresh the
+ *     .pbix production step depends on
  *
  * Everything is checked with the Node standard library only, so CI needs no
  * browser and no extra packages.
@@ -38,6 +40,11 @@ const PRIVACY_POLICY_URL = "https://atlyn.io/legal/privacy";
 // Atlyn storefront subscription. Recorded here so the dossier cannot lose it.
 const LISTING_PRICING = "AppSource listing: Free";
 const SAMPLE_PROJECT = "samples/AtlynHierarchyExplorerSample.pbip";
+// A PBIP caches no data, so Desktop opens the project with empty tables. Saving
+// the .pbix without refreshing first ships a sample report that demonstrates
+// nothing, which is the one thing AppSource review uses it for. Pinned here so
+// the instruction cannot quietly disappear from the dossier.
+const SAMPLE_REFRESH_STEP = "Home > Refresh > Schema and data";
 
 // A single flat rectangle is what a fabricated placeholder looks like; genuine
 // artwork always clears these thresholds. Screenshots contain antialiased text,
@@ -181,7 +188,8 @@ if (dossier) {
     visual.version,
     EULA,
     LISTING_PRICING,
-    SAMPLE_PROJECT
+    SAMPLE_PROJECT,
+    SAMPLE_REFRESH_STEP
   ]) {
     if (typeof value === "string" && !dossier.includes(value)) {
       fail(`${DOSSIER} must record "${value}" so the submission form and the repository cannot drift`);
@@ -208,4 +216,4 @@ for (const screenshot of screenshots) {
   );
 }
 console.log(`Validated ${EULA}, ${DOSSIER}, support ${SUPPORT_URL}, privacy ${PRIVACY_POLICY_URL}`);
-console.log(`Validated ${SAMPLE_PROJECT} and "${LISTING_PRICING}"`);
+console.log(`Validated ${SAMPLE_PROJECT}, "${LISTING_PRICING}" and "${SAMPLE_REFRESH_STEP}"`);

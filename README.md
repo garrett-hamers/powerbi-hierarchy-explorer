@@ -48,8 +48,10 @@ validated on every build by `npm run validate-publication-assets`:
   Power BI Project whose data is a DAX `DATATABLE` calculated table (no data
   source, so no credential prompt) and with this visual embedded as a private
   custom visual. Rebuild it with `npm run package && npm run sample-report`. The
-  `.pbix` Partner Center wants is produced from it with one *Save As* in Power BI
-  Desktop.
+  `.pbix` Partner Center wants is produced from it in Power BI Desktop by running
+  **Home > Refresh > Schema and data** and then *Save As*. The refresh is
+  required: a PBIP caches no data, so saving without it yields empty tables. See
+  `docs/partner-center-submission.md` section 3.
 - `docs/partner-center-submission.md` - every Partner Center field with its final
   value, plus the manual steps that remain.
 

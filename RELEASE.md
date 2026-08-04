@@ -57,8 +57,12 @@ packages are intentionally not committed.
 
    `npm run verify-package` fails if the copy of the `.pbiviz` embedded in
    `samples/` is stale. The `.pbix` Partner Center uploads is produced from that
-   project with one *Save As* in Power BI Desktop; it cannot be generated
-   headlessly and is deliberately not committed.
+   project in Power BI Desktop by running **Home > Refresh > Schema and data**
+   and then *Save As*; it cannot be generated headlessly and is deliberately not
+   committed. The refresh is required - a PBIP caches no data, so a `.pbix` saved
+   without it ships empty tables and would fail AppSource review. The full
+   procedure, including the credential-prompt check, is in
+   `docs/partner-center-submission.md` section 3.
 6. After the final change is merged to `main`, create the lowercase
    `certification` branch from that exact commit when a reviewer needs a
    submission snapshot.

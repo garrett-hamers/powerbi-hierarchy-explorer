@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+Repository and documentation changes only. The packaged `.pbiviz` is byte-identical
+to the `1.0.1.0` artifact, so nothing here changes what is published.
+
+- Pin LF for every package input (`.gitattributes`). `pbiviz package` embeds
+  working-tree files in the archive - `assets/icon.png` is base64-encoded
+  verbatim into `content.iconBase64` and `stringResources/en-US/resources.resjson`
+  is read into the packaged manifest - so a `core.autocrlf` checkout could make
+  the packaged bytes depend on the platform as well as the commit.
+  `verify-reproducible-package` cannot detect that, because it packages twice on
+  one machine and so proves per-platform reproducibility only. Measured before
+  and after on a CRLF Windows checkout and against Linux CI: the SHA-256 is
+  unchanged, so this makes the existing platform-independence structural rather
+  than incidental. `tests/package.test.ts` pins the rule and its ordering against
+  `samples/**/CustomVisuals/** -text`, which must stay the last matching pattern.
+- Document the model refresh the sample `.pbix` requires. A PBIP caches no data,
+  so Power BI Desktop opens the project reporting *"Some of the tables have
+  incomplete or no data."* and **Home > Refresh > Schema and data** must be run
+  before *Save As*; without it the `.pbix` ships empty tables and would fail
+  AppSource review. `docs/partner-center-submission.md` previously said the
+  opposite - that there was "no refresh step" - which was wrong, and `README.md`
+  and `RELEASE.md` both described the procedure as "one *Save As*". The refresh
+  must still not prompt for credentials: the data is a calculated table with no
+  data source, so a prompt means something external reached the model. The step
+  is enforced from `validate-publication-assets`.
+
 ## 1.0.1.0
 
 Prepares the visual for its Microsoft AppSource / Partner Center submission, and
