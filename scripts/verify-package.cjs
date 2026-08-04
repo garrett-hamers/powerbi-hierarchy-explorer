@@ -69,9 +69,46 @@ if (fs.existsSync(releaseManifestPath)) {
   );
   assert.equal(releaseManifest.visualGuid, sourceManifest.visual.guid);
   assert.equal(releaseManifest.visualVersion, sourceManifest.visual.version);
+  assert.equal(releaseManifest.supportUrl, sourceManifest.visual.supportUrl);
+  assert.equal(releaseManifest.authorEmail, sourceManifest.author.email);
+  assert.match(releaseManifest.privacyPolicyUrl, /^https:\/\//);
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.path, "assets/partner-center-logo.png");
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.width, 300);
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.height, 300);
+  assert.equal(releaseManifest.publicationAssets.eula, "EULA.md");
+  assert.equal(
+    releaseManifest.publicationAssets.submissionDossier,
+    "docs/partner-center-submission.md"
+  );
+
+  const screenshots = releaseManifest.publicationAssets.screenshots;
+  assert.ok(
+    Array.isArray(screenshots) && screenshots.length >= 1 && screenshots.length <= 5,
+    "the release manifest must record between 1 and 5 Partner Center screenshots"
+  );
+  for (const screenshot of screenshots) {
+    assert.match(screenshot.path, /^assets\/screenshots\/.+\.png$/);
+    assert.equal(screenshot.width, 1366, `${screenshot.path} must be 1366 wide`);
+    assert.equal(screenshot.height, 768, `${screenshot.path} must be 768 tall`);
+    assert.ok(
+      screenshot.bytes <= 1024 * 1024,
+      `${screenshot.path} must stay within the 1024 KB Partner Center limit`
+    );
+  }
 }
+
+// A visual whose compiled stylesheet is missing renders unstyled in the host,
+// so the packaged CSS payload is part of the release contract.
+const packagedResources = JSON.parse(
+  fs.readFileSync(path.join(root, ".tmp/drop/pbiviz.json"), "utf8")
+);
+assert.ok(
+  typeof packagedResources.content?.css === "string" && packagedResources.content.css.includes(".atlyn-root"),
+  "the packaged bundle must embed the compiled stylesheet"
+);
+assert.ok(
+  typeof packagedResources.content?.js === "string" && packagedResources.content.js.length > 0,
+  "the packaged bundle must embed the compiled script"
+);
 
 console.log(`Verified ${packageName} (${fs.statSync(packagePath).size} bytes)`);

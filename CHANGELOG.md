@@ -9,3 +9,23 @@
 - Add a deterministic Partner Center publication logo asset contract
   (`assets/partner-center-logo.png`), include its metadata in release manifests,
   and run CI on lowercase `certification` snapshots.
+- Ship the compiled stylesheet inside the package. `src/visual.ts` never imported
+  `style/visual.less`, so powerbi-visuals-tools bundled an empty `content.css`
+  and the visual rendered completely unstyled in the host.
+- Keep the caret in the search box while typing. Search revealed the first match
+  on every keystroke by moving DOM focus into the accessible tree, so no more
+  than one character could be entered.
+- Render the accessible tree as a sibling panel of the canvas instead of a child
+  of it. Nested inside the scrolling canvas it appeared below the full-height
+  graph, so focusing it scrolled the graph away and pushed the tree outside the
+  clipped bounds of the visual.
+- Stop the toolbar, status, diagnostics and breadcrumb strips from being
+  squeezed, which sliced data quality messages in half, and align tree leaves
+  under their parents by reserving the expand/collapse column on every row.
+- Add the remaining AppSource submission assets: real 1366x768 screenshots
+  rendered from the packaged bundle (`npm run screenshots`), `EULA.md`, and
+  `docs/partner-center-submission.md`, all enforced by
+  `npm run validate-publication-assets`.
+- Point submission metadata at the storefront: `supportUrl`
+  `https://atlyn.io/contact` and author email `atlyn.help@gmail.com`, with a
+  listing-quality description. The visual GUID is unchanged.

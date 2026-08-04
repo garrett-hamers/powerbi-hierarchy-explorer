@@ -1,4 +1,5 @@
 import type powerbi from "powerbi-visuals-api";
+import "./../style/visual.less";
 import {
   buildHierarchy,
   Diagnostic,
@@ -237,8 +238,13 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.semanticTree.setAttribute("aria-multiselectable", "true");
     this.semanticTree.setAttribute("aria-orientation", "vertical");
     this.semanticTree.setAttribute("aria-label", this.strings.tree);
-    this.canvasWrap.append(this.emptyElement, this.graphSvg, this.semanticTree);
+    this.canvasWrap.append(this.emptyElement, this.graphSvg);
     this.root.appendChild(this.canvasWrap);
+    // The accessible tree is a sibling panel of the canvas, not a child of it.
+    // Nested inside the scrolling canvas it would sit below the full-height
+    // graph, so focusing it scrolled the graph out of view and pushed the tree
+    // past the clipped bottom edge of the visual.
+    this.root.appendChild(this.semanticTree);
 
     this.graphSvg.addEventListener("click", this.onGraphClick);
     this.graphSvg.addEventListener("dblclick", this.onGraphDoubleClick);
@@ -1119,7 +1125,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       .sort((left, right) => left.localeCompare(right, this.locale, { numeric: true }))
       .find((id) => this.matchesSearch(this.graph.nodes.get(id)!));
     if (match) {
-      this.focusNode(match);
+      this.focusNode(match, false);
       return;
     }
     this.render();
@@ -1283,7 +1289,13 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     }
   };
 
-  private focusNode(id: string): void {
+  /**
+   * Reveals a node and marks it as the focus target. `moveDomFocus` is false
+   * when the caller already owns keyboard focus - search runs on every
+   * keystroke, and pulling DOM focus into the tree there would eject the caret
+   * from the search box after a single character.
+   */
+  private focusNode(id: string, moveDomFocus = true): void {
     if (!this.graph.nodes.has(id)) {
       return;
     }
@@ -1292,7 +1304,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       getAncestorIds(this.graph, id).forEach((ancestorId) => this.collapsed.delete(ancestorId));
     }
     this.render();
-    this.semanticItems.get(id)?.focus({ preventScroll: true });
+    if (moveDomFocus) {
+      this.semanticItems.get(id)?.focus({ preventScroll: true });
+    }
   }
 
   private onCanvasContextMenu = (event: MouseEvent): void => {

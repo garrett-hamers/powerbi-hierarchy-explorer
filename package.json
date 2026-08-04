@@ -5,7 +5,8 @@
   "description": "Atlyn Hierarchy Explorer Power BI custom visual",
   "license": "MIT",
   "overrides": {
-    "uuid": "11.1.1"
+    "uuid": "11.1.1",
+    "hono": "4.12.34"
   },
   "scripts": {
     "build": "npm run package",
@@ -14,6 +15,7 @@
     "normalize-package": "node scripts/normalize-package.cjs",
     "verify-package": "node scripts/verify-package.cjs",
     "validate-publication-assets": "node scripts/validate-publication-assets.cjs",
+    "screenshots": "node scripts/capture-submission-screenshots.cjs",
     "release-manifest": "node scripts/write-release-manifest.cjs",
     "verify-reproducible-package": "node scripts/verify-reproducible-package.cjs",
     "start": "pbiviz start",

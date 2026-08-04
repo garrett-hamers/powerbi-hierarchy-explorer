@@ -1,0 +1,77 @@
+/*
+ * Framing only. These rules style the caption strip and the stage the visual is
+ * mounted into. Nothing here targets an .atlyn-* selector, so every pixel of the
+ * visual itself comes from the compiled stylesheet in the package.
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #f3f2f1;
+  color: #242424;
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.frame {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 768px;
+  padding: 22px 24px 24px;
+  width: 1366px;
+}
+
+.frame-caption {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+}
+
+.frame-mark {
+  background: #2764c4;
+  border-radius: 6px;
+  display: block;
+  flex: 0 0 auto;
+  height: 30px;
+  width: 30px;
+}
+
+.frame-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.frame-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.frame-subtitle {
+  color: #5f6368;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.frame-stage {
+  background: #ffffff;
+  border: 1px solid #e1dfdd;
+  border-radius: 4px;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#visual-host {
+  height: 100%;
+  width: 100%;
+}

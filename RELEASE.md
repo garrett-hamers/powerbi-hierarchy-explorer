@@ -25,13 +25,31 @@ packages are intentionally not committed.
    generated manifest against the source capabilities, dependencies, and stable
    metadata. It also writes `dist/release-manifest.json` with the package
    filename, byte length, uppercase SHA-256, source commit, visual GUID/version,
-   Partner Center logo metadata (`assets/partner-center-logo.png` hash/bytes/
-   dimensions), and normalization policy. The reproducibility gate runs two
-   clean packages and requires identical bytes and SHA-256.
+   support/privacy URLs, author email, Partner Center logo and screenshot
+   metadata (path/hash/bytes/dimensions), EULA and dossier paths, and the
+   normalization policy. The reproducibility gate runs two clean packages and
+   requires identical bytes and SHA-256.
 3. Record `dist/release-manifest.json` with the `.pbiviz` artifact when
    publishing to immutable Blob/AppSource storage. Rebuilds from identical
    source and locked dependencies must produce the same package hash.
-4. After the final change is merged to `main`, create the lowercase
+4. If the visual's appearance or interaction changed, regenerate the AppSource
+   screenshots so the listing matches what ships. This needs a browser, which is
+   intentionally not a dependency of this package:
+
+   ```text
+   npm install --no-save playwright
+   npx playwright install chromium
+   npm run package
+   npm run screenshots
+   ```
+
+   Screenshot bytes are not reproducible across machines because font
+   rasterisation differs; the enforced contract is exact 1366x768 dimensions,
+   the 1024 KB ceiling, PNG structure, and non-placeholder content.
+5. Review `docs/partner-center-submission.md` before submitting. It holds every
+   Partner Center field with its final value and the manual steps that remain,
+   including the sample `.pbix`, which can only be authored in Power BI Desktop.
+6. After the final change is merged to `main`, create the lowercase
    `certification` branch from that exact commit when a reviewer needs a
    submission snapshot.
 
