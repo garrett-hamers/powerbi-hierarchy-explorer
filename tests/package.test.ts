@@ -138,6 +138,30 @@ describe("certification-first package contract", () => {
     );
   });
 
+  test("pins LF for every package input so the archive is platform-independent", () => {
+    // `pbiviz package` embeds working-tree files in the archive: assets/icon.png
+    // is base64-encoded verbatim into content.iconBase64 and
+    // stringResources/en-US/resources.resjson is read into the packaged
+    // manifest. Without these rules a core.autocrlf checkout rewrites tracked
+    // text to CRLF and the same commit can yield a different .pbiviz per
+    // platform. verify-reproducible-package cannot catch that: it packages twice
+    // on one machine, so it passes on both platforms even when they disagree.
+    const attributes = fs.readFileSync(path.join(root, ".gitattributes"), "utf8");
+    const globalRule = attributes.indexOf("* text=auto eol=lf");
+    const binaryRule = attributes.indexOf("*.png binary");
+    const customVisualsRule = attributes.indexOf("samples/**/CustomVisuals/** -text");
+
+    expect(globalRule).toBeGreaterThanOrEqual(0);
+    expect(binaryRule).toBeGreaterThanOrEqual(0);
+    expect(customVisualsRule).toBeGreaterThanOrEqual(0);
+
+    // In .gitattributes the last matching pattern wins. The embedded copy of the
+    // package is byte-compared against the freshly built archive by
+    // verify-package, so its -text rule has to keep overriding the global rule.
+    // Reordering these two lines would silently re-enable conversion there.
+    expect(customVisualsRule).toBeGreaterThan(globalRule);
+  });
+
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {
     const source = fs
       .readdirSync(path.join(root, "src"))

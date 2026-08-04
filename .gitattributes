@@ -1,12 +1,38 @@
-# The sample report embeds a byte-exact copy of the built .pbiviz, and
-# verify-package compares those files against the archive it just produced.
-# Line-ending conversion would break that comparison on some checkouts.
-samples/**/CustomVisuals/** -text
+# Line endings are a package-input contract, not a style preference.
+#
+# `pbiviz package` reads working-tree files and embeds them in the archive:
+# assets/icon.png is base64-encoded verbatim into content.iconBase64, and
+# stringResources/en-US/resources.resjson is read into the packaged manifest.
+# If a checkout converts any of those to CRLF, the same commit produces a
+# different .pbiviz on Windows than on Linux CI - two artifacts, one version,
+# and verify-reproducible-package passes on both, because it only ever compares
+# two runs on the same machine.
+#
+# Pinning LF for every text file makes the packaged bytes a function of the
+# commit alone, on every platform and regardless of the developer's
+# core.autocrlf setting.
+* text=auto eol=lf
+
+# Images and packages are byte streams. Marking them binary keeps content
+# sniffing from ever rewriting them, which would corrupt the base64 icon
+# embedded in the package and the fixed-size Partner Center assets.
+*.png binary
+*.pbiviz binary
 
 # Power BI writes the project definition as UTF-8; keep it stable across
 # platforms so regenerating the sample never shows a whitespace-only diff.
+# These are redundant under the rule above and are kept because they document
+# which files the sample generator owns.
 samples/**/*.json text eol=lf
 samples/**/*.tmdl text eol=lf
 samples/**/*.pbip text eol=lf
 samples/**/*.pbir text eol=lf
 samples/**/*.pbism text eol=lf
+
+# The sample report embeds a byte-exact copy of the built .pbiviz, and
+# verify-package compares those files against the archive it just produced.
+# Line-ending conversion would break that comparison on some checkouts.
+#
+# This must stay the last matching rule for these paths: in .gitattributes the
+# last match wins, so it has to override the `* text=auto eol=lf` above.
+samples/**/CustomVisuals/** -text
