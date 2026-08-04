@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 1.0.1.0
 
+- Bump the visual to `1.0.1.0` (`package.json` `1.0.1`). Preparing the AppSource
+  submission changed `pbiviz.json`, so a build from this source no longer
+  reproduces the bytes already published at the storefront's version-keyed path
+  `hierarchy-explorer/1.0.0.0/atlynHierarchyExplorer.1.0.0.0.pbiviz` (SHA-256
+  `794002B1C08350FAAD04B67A1E4E734D1A34DBDA3039D3831C6AC336FB131D61`, 19,810
+  bytes). Two different artifacts must never share one version number, so
+  `1.0.1.0` supersedes and retires the `1.0.0.0` storefront artifact. The
+  packaged filename is now `atlynHierarchyExplorer.1.0.1.0.pbiviz`. The visual
+  GUID `atlynHierarchyExplorer` is unchanged, so this is an upgrade of the same
+  visual rather than a new one.
 - Harden table contracts, segmented data accumulation, deterministic tidy-tree
   layout, bounded rendering, and accessible interaction state.
 - Align Power BI packaging and linting gates with the certification-safe
