@@ -114,10 +114,18 @@ and `npm run verify-package` fails the build if the embedded copy of the
 
 ### Why it is offline
 
-- The model has a single import partition built from an inline Power Query
-  `#table` of literal rows. There is no SQL, web, file, folder, OData or
-  SharePoint source anywhere in it, so a refresh needs no gateway and no
-  credentials. `tests/sample-report.test.ts` asserts this.
+- The data is a **DAX calculated table** built with `DATATABLE`, not a Power
+  Query partition. A calculated table has **no data source at all**, so nothing
+  can prompt for credentials, there is no privacy-level or formula-firewall
+  surface, and the report carries no refresh dependency.
+  `tests/sample-report.test.ts` asserts the partition is `= calculated`, that no
+  Power Query construct survives, and that no connector or URL string appears
+  anywhere in the model.
+- `DATATABLE` accepts literal constants only, so the root row's missing
+  `ParentId` is written as an empty string rather than `BLANK()`. That is
+  behaviourally identical here: `normalizeId` in `src/graph.ts` trims and
+  returns null for an empty string, so the visual already reads an empty
+  `ParentId` as a root.
 - The visual is embedded as a **private custom visual** under
   `AtlynHierarchyExplorerSample.Report/CustomVisuals/atlynHierarchyExplorer/`,
   registered through `resourcePackages` in `report.json`. Microsoft loads
@@ -127,6 +135,31 @@ and `npm run verify-package` fails the build if the embedded copy of the
 - All seven data roles are bound: `NodeId`, `ParentId`, `Label`, `Subtitle` and
   `Category` project columns, while `Value` and `Tooltips` use a `Sum`
   aggregation.
+
+### Format versions
+
+`definition.pbir` declares `"version": "4.0"` and `definition.pbism` declares
+`"version": "4.2"`. These are not arbitrary. Microsoft documents version `1.0`
+as meaning the report definition **must** be PBIR-Legacy in `report.json` and the
+semantic model **must** be TMSL in `model.bim`. This project uses the PBIR
+`definition\` folder and the TMDL `definition\` folder, both of which require
+`4.0` or above. Declaring `1.0` while shipping the folder formats would
+contradict the declared format. `tests/sample-report.test.ts` pins both.
+
+### Do not reach for pbi-tools
+
+`pbi-tools compile` cannot produce a PBIT or PBIX against the Power BI Desktop
+build on the development machine. It fails with:
+
+```text
+System.MissingMethodException: Method not found:
+'Void Microsoft.PowerBI.Packaging.PowerBIPackager.Save(...)'
+```
+
+pbi-tools 1.2.0 is incompatible with the Desktop 2.150.2102.0 packaging API. Its
+`extract` and `convert` verbs still work, but `compile` does not, so nothing in
+this repository depends on it. The native PBIP folder format used here needs no
+third-party tooling at all: Power BI Desktop opens the `.pbip` directly.
 
 ### The one manual step: producing the .pbix
 
@@ -140,9 +173,10 @@ So the project is committed and the `.pbix` is produced once, by hand:
    reports using enhanced metadata format (PBIR)**. Restart Desktop. Both are
    still preview features.
 2. Open `samples/AtlynHierarchyExplorerSample.pbip`.
-3. Let the model refresh. It should complete with no credential prompt; if
-   Desktop asks for one, something external crept into the model and the sample
-   is no longer valid.
+3. Let the model load. There is no data source, so there must be no credential
+   prompt and no refresh step; the calculated table is evaluated by the engine.
+   If Desktop asks for credentials, something external crept into the model and
+   the sample is no longer valid.
 4. Confirm the visual renders the hierarchy on the **Hierarchy overview** page.
 5. **File > Save As** and choose `.pbix`. Keep it outside the repository - the
    `.pbix` is a build output and is deliberately not committed.

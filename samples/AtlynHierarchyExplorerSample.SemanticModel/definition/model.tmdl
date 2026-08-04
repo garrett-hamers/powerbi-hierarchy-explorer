@@ -3,6 +3,4 @@ model Model
 	defaultPowerBIDataSourceVersion: powerBI_V3
 	sourceQueryCulture: en-US
 
-	annotation PBI_QueryOrder = ["Hierarchy"]
-
 ref table Hierarchy

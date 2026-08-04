@@ -45,10 +45,11 @@ validated on every build by `npm run validate-publication-assets`:
 - `EULA.md` - end user licence, granting the same permissive MIT terms as
   `LICENSE`.
 - `samples/AtlynHierarchyExplorerSample.pbip` - the offline sample report, as a
-  Power BI Project with a TMDL model whose data is an inline Power Query
-  `#table` and with this visual embedded as a private custom visual. Rebuild it
-  with `npm run package && npm run sample-report`. The `.pbix` Partner Center
-  wants is produced from it with one *Save As* in Power BI Desktop.
+  Power BI Project whose data is a DAX `DATATABLE` calculated table (no data
+  source, so no credential prompt) and with this visual embedded as a private
+  custom visual. Rebuild it with `npm run package && npm run sample-report`. The
+  `.pbix` Partner Center wants is produced from it with one *Save As* in Power BI
+  Desktop.
 - `docs/partner-center-submission.md` - every Partner Center field with its final
   value, plus the manual steps that remain.
 

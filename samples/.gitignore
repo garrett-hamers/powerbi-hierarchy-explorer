@@ -1,0 +1,5 @@
+# Power BI Desktop local state, written when the project is opened.
+# cache.abf is an Analysis Services backup of the model *and its data*.
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+**/.pbi/unappliedChanges.json

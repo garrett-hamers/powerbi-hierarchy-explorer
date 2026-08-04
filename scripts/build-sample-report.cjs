@@ -67,10 +67,21 @@ const writeJson = (filePath, value) => {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 };
 
-/** Renders an M literal. Nulls stay null so ParentId roots survive the round trip. */
-const mLiteral = (value) => {
+const DAX_TYPES = { string: "STRING", double: "DOUBLE", int64: "INTEGER", boolean: "BOOLEAN" };
+
+/**
+ * Renders a DATATABLE literal.
+ *
+ * DATATABLE accepts constant values only. Rather than depend on BLANK() being
+ * accepted in its value list - a failure that would surface only when the
+ * project is opened in Power BI Desktop - a missing ParentId is emitted as an
+ * empty string. That is behaviourally identical for this visual: normalizeId in
+ * src/graph.ts trims and returns null for an empty string, so an empty ParentId
+ * is already treated as a root.
+ */
+const daxLiteral = (value) => {
   if (value === null || value === undefined) {
-    return "null";
+    return '""';
   }
   if (typeof value === "number") {
     return String(value);
@@ -78,35 +89,25 @@ const mLiteral = (value) => {
   return `"${String(value).replace(/"/g, '""')}"`;
 };
 
-const M_TYPES = { string: "text", double: "number", int64: "Int64.Type", boolean: "logical" };
-
 /**
- * Builds a readable inline #table. Deliberately not the Base64/Deflate blob that
- * Power BI Desktop's "Enter data" produces: a reviewer checking that the sample
- * is genuinely offline has to be able to read the data.
+ * Builds a DAX calculated table. This is deliberately not a Power Query
+ * partition: a calculated table has no data source at all, so nothing can prompt
+ * for credentials, there is no privacy-level or formula-firewall surface, and
+ * the report has no refresh dependency. That is what "works fully offline with
+ * no external connections" has to mean for a Partner Center sample.
  */
 const buildPartitionExpression = (data) => {
-  const columnTypes = data.columns
-    .map((column) => `${mIdentifier(column.name)} = ${M_TYPES[column.dataType] ?? "text"}`)
-    .join(", ");
-  const rows = data.rows.map(
-    (row, index) => `            {${row.map(mLiteral).join(", ")}}${index === data.rows.length - 1 ? "" : ","}`
+  // Every column pair is comma-terminated, including the last, because the
+  // value block follows it.
+  const columnTypes = data.columns.map(
+    (column) => `    "${column.name}", ${DAX_TYPES[column.dataType] ?? "STRING"},`
   );
-  return [
-    "let",
-    "    Source = #table(",
-    `        type table [${columnTypes}],`,
-    "        {",
-    ...rows,
-    "        }",
-    "    )",
-    "in",
-    "    Source"
-  ];
+  const rows = data.rows.map(
+    (row, index) =>
+      `        {${row.map(daxLiteral).join(", ")}}${index === data.rows.length - 1 ? "" : ","}`
+  );
+  return ["DATATABLE(", ...columnTypes, "    {", ...rows, "    }", ")"];
 };
-
-/** M identifiers that are not simple words need the #"..." form. */
-const mIdentifier = (name) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : `#"${name}"`);
 
 /** TMDL quotes names that are not simple words with single quotes. */
 const tmdlName = (name) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : `'${name}'`);
@@ -132,8 +133,8 @@ const lineageTag = (...parts) => {
 
 /**
  * Emits the semantic model as TMDL, the format Power BI Desktop writes today and
- * the one the sibling Atlyn sample uses. Indentation is tabs, and the Power Query
- * partition body is indented with four tabs, matching Desktop's own output.
+ * the one the sibling Atlyn sample uses. Indentation is tabs, and the calculated
+ * table expression is indented with four tabs, matching Desktop's own output.
  */
 const writeSemanticModel = (modelDirectory, data) => {
   const definition = path.join(modelDirectory, "definition");
@@ -145,6 +146,8 @@ const writeSemanticModel = (modelDirectory, data) => {
     `database ${PROJECT}\n\tcompatibilityLevel: ${COMPATIBILITY_LEVEL}\n\n`
   );
 
+  // No PBI_QueryOrder annotation: a calculated table is not a Power Query
+  // query, so there is nothing to order.
   fs.writeFileSync(
     path.join(definition, "model.tmdl"),
     [
@@ -153,33 +156,36 @@ const writeSemanticModel = (modelDirectory, data) => {
       "\tdefaultPowerBIDataSourceVersion: powerBI_V3",
       "\tsourceQueryCulture: en-US",
       "",
-      `\tannotation PBI_QueryOrder = ["${data.table}"]`,
-      "",
       `ref table ${tmdlName(data.table)}`,
       ""
     ].join("\n")
   );
 
-  const lines = [`table ${tmdlName(data.table)}`, `\tlineageTag: ${lineageTag("table", data.table)}`, ""];
+  const lines = [
+    `/// ${data.description}`,
+    `table ${tmdlName(data.table)}`,
+    `\tlineageTag: ${lineageTag("table", data.table)}`,
+    ""
+  ];
   for (const column of data.columns) {
     const numeric = column.dataType !== "string";
+    // Calculated table columns take their type from the DATATABLE expression,
+    // so they declare isNameInferred and a bracketed source column rather than
+    // an explicit dataType.
     lines.push(
       `\tcolumn ${tmdlName(column.name)}`,
-      `\t\tdataType: ${column.dataType}`,
       `\t\tlineageTag: ${lineageTag("column", data.table, column.name)}`,
       `\t\tsummarizeBy: ${numeric ? "sum" : "none"}`,
-      `\t\tsourceColumn: ${column.name}`,
+      `\t\tisNameInferred`,
+      `\t\tsourceColumn: [${column.name}]`,
       "",
       "\t\tannotation SummarizationSetBy = Automatic",
       ""
     );
-    if (numeric) {
-      lines.push('\t\tannotation PBI_FormatHint = {"isGeneralNumber":true}', "");
-    }
   }
 
   lines.push(
-    `\tpartition ${tmdlName(data.table)} = m`,
+    `\tpartition ${tmdlName(data.table)} = calculated`,
     "\t\tmode: import",
     "\t\tsource =",
     ...buildPartitionExpression(data).map((line) => `\t\t\t\t${line}`),
@@ -372,7 +378,7 @@ const build = async () => {
 
   console.log(`Generated samples/${PROJECT}.pbip for ${guid} ${manifest.visual.version}`);
   console.log(`  roles bound: ${roleNames.join(", ")}`);
-  console.log(`  rows: ${data.rows.length} inline literals in table "${data.table}"`);
+  console.log(`  data: DAX calculated table "${data.table}", ${data.rows.length} literal rows, no data source`);
   console.log(`  embedded visual: ${embedded.map((entry) => `CustomVisuals/${guid}/${entry}`).join(", ")}`);
 };
 

@@ -1,91 +1,91 @@
+/// Offline sample hierarchy for the AppSource sample report. It is a DAX calculated table built with DATATABLE, so the model has no data source at all: nothing can prompt for credentials and there is no refresh dependency. The organisation is invented for the listing and matches the dataset used for the store screenshots.
 table Hierarchy
 	lineageTag: 90b92473-c5b7-ee3d-52ed-94c5f7c21448
 
 	column NodeId
-		dataType: string
 		lineageTag: e9c3899a-b786-5fbf-b28d-33cf17030743
 		summarizeBy: none
-		sourceColumn: NodeId
+		isNameInferred
+		sourceColumn: [NodeId]
 
 		annotation SummarizationSetBy = Automatic
 
 	column ParentId
-		dataType: string
 		lineageTag: 7d266854-5863-8cf0-c95d-2bcb08147c2f
 		summarizeBy: none
-		sourceColumn: ParentId
+		isNameInferred
+		sourceColumn: [ParentId]
 
 		annotation SummarizationSetBy = Automatic
 
 	column Label
-		dataType: string
 		lineageTag: 5fdbb14f-df7a-48c3-38de-def3b7a3a64e
 		summarizeBy: none
-		sourceColumn: Label
+		isNameInferred
+		sourceColumn: [Label]
 
 		annotation SummarizationSetBy = Automatic
 
 	column Subtitle
-		dataType: string
 		lineageTag: ab2da1e0-95d6-b1f2-fa80-efc1308fb64d
 		summarizeBy: none
-		sourceColumn: Subtitle
+		isNameInferred
+		sourceColumn: [Subtitle]
 
 		annotation SummarizationSetBy = Automatic
 
 	column Category
-		dataType: string
 		lineageTag: 371fd986-5a73-b995-2c50-9306879dbeea
 		summarizeBy: none
-		sourceColumn: Category
+		isNameInferred
+		sourceColumn: [Category]
 
 		annotation SummarizationSetBy = Automatic
 
 	column Revenue
-		dataType: double
 		lineageTag: c33d2f46-313c-73e3-2073-be4bc66de878
 		summarizeBy: sum
-		sourceColumn: Revenue
+		isNameInferred
+		sourceColumn: [Revenue]
 
 		annotation SummarizationSetBy = Automatic
-
-		annotation PBI_FormatHint = {"isGeneralNumber":true}
 
 	column Headcount
-		dataType: int64
 		lineageTag: 288db5bc-80df-f030-3e4f-ac38a92d07eb
 		summarizeBy: sum
-		sourceColumn: Headcount
+		isNameInferred
+		sourceColumn: [Headcount]
 
 		annotation SummarizationSetBy = Automatic
 
-		annotation PBI_FormatHint = {"isGeneralNumber":true}
-
-	partition Hierarchy = m
+	partition Hierarchy = calculated
 		mode: import
 		source =
-				let
-				    Source = #table(
-				        type table [NodeId = text, ParentId = text, Label = text, Subtitle = text, Category = text, Revenue = number, Headcount = Int64.Type],
-				        {
-				            {"ops", null, "Meridian Worldwide", "All regions · $48.2M · 1,284 people", "Company", 48200000, 1284},
-				            {"na", "ops", "North America", "Region · $21.4M · 512 people", "Region", 21400000, 512},
-				            {"emea", "ops", "Europe & Middle East", "Region · $16.9M · 448 people", "Region", 16900000, 448},
-				            {"apac", "ops", "Asia Pacific", "Region · $9.9M · 324 people", "Region", 9900000, 324},
-				            {"na-ent", "na", "Enterprise Sales", "Division · $12.6M · 214 people", "Division", 12600000, 214},
-				            {"na-com", "na", "Commercial Sales", "Division · $8.8M · 298 people", "Division", 8800000, 298},
-				            {"eu-ent", "emea", "Enterprise Sales", "Division · $10.1M · 205 people", "Division", 10100000, 205},
-				            {"eu-com", "emea", "Commercial Sales", "Division · $6.8M · 243 people", "Division", 6800000, 243},
-				            {"ap-ent", "apac", "Enterprise Sales", "Division · $9.9M · 324 people", "Division", 9900000, 324},
-				            {"na-ne", "na-ent", "Northeast Team", "Team · $7.1M · 118 people", "Team", 7100000, 118},
-				            {"na-w", "na-ent", "West Team", "Team · $5.5M · 96 people", "Team", 5500000, 96},
-				            {"eu-dach", "eu-ent", "DACH Team", "Team · $5.9M · 112 people", "Team", 5900000, 112},
-				            {"eu-uki", "eu-ent", "UK & Ireland Team", "Team · $4.2M · 93 people", "Team", 4200000, 93},
-				            {"na-ne-ren", "na-ne", "Renewals Pod", "Pod · $2.4M · 41 people", "Pod", 2400000, 41},
-				            {"na-ne-new", "na-ne", "New Business Pod", "Pod · $4.7M · 77 people", "Pod", 4700000, 77}
-				        }
-				    )
-				in
-				    Source
+				DATATABLE(
+				    "NodeId", STRING,
+				    "ParentId", STRING,
+				    "Label", STRING,
+				    "Subtitle", STRING,
+				    "Category", STRING,
+				    "Revenue", DOUBLE,
+				    "Headcount", INTEGER,
+				    {
+				        {"ops", "", "Meridian Worldwide", "All regions · $48.2M · 1,284 people", "Company", 48200000, 1284},
+				        {"na", "ops", "North America", "Region · $21.4M · 512 people", "Region", 21400000, 512},
+				        {"emea", "ops", "Europe & Middle East", "Region · $16.9M · 448 people", "Region", 16900000, 448},
+				        {"apac", "ops", "Asia Pacific", "Region · $9.9M · 324 people", "Region", 9900000, 324},
+				        {"na-ent", "na", "Enterprise Sales", "Division · $12.6M · 214 people", "Division", 12600000, 214},
+				        {"na-com", "na", "Commercial Sales", "Division · $8.8M · 298 people", "Division", 8800000, 298},
+				        {"eu-ent", "emea", "Enterprise Sales", "Division · $10.1M · 205 people", "Division", 10100000, 205},
+				        {"eu-com", "emea", "Commercial Sales", "Division · $6.8M · 243 people", "Division", 6800000, 243},
+				        {"ap-ent", "apac", "Enterprise Sales", "Division · $9.9M · 324 people", "Division", 9900000, 324},
+				        {"na-ne", "na-ent", "Northeast Team", "Team · $7.1M · 118 people", "Team", 7100000, 118},
+				        {"na-w", "na-ent", "West Team", "Team · $5.5M · 96 people", "Team", 5500000, 96},
+				        {"eu-dach", "eu-ent", "DACH Team", "Team · $5.9M · 112 people", "Team", 5900000, 112},
+				        {"eu-uki", "eu-ent", "UK & Ireland Team", "Team · $4.2M · 93 people", "Team", 4200000, 93},
+				        {"na-ne-ren", "na-ne", "Renewals Pod", "Pod · $2.4M · 41 people", "Pod", 2400000, 41},
+				        {"na-ne-new", "na-ne", "New Business Pod", "Pod · $4.7M · 77 people", "Pod", 4700000, 77}
+				    }
+				)
 
 	annotation PBI_ResultType = Table

@@ -1,6 +1,6 @@
 {
   "table": "Hierarchy",
-  "description": "Offline sample hierarchy for the AppSource sample report. Every value is a literal: the generated Power Query partition uses an inline #table, so the report refreshes with no data source, no gateway and no credentials. The organisation is invented for the listing and matches the dataset used for the store screenshots.",
+  "description": "Offline sample hierarchy for the AppSource sample report. It is a DAX calculated table built with DATATABLE, so the model has no data source at all: nothing can prompt for credentials and there is no refresh dependency. The organisation is invented for the listing and matches the dataset used for the store screenshots.",
   "columns": [
     { "name": "NodeId", "dataType": "string" },
     { "name": "ParentId", "dataType": "string" },
