@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const JSZip = require("jszip");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
@@ -69,9 +70,77 @@ if (fs.existsSync(releaseManifestPath)) {
   );
   assert.equal(releaseManifest.visualGuid, sourceManifest.visual.guid);
   assert.equal(releaseManifest.visualVersion, sourceManifest.visual.version);
+  assert.equal(releaseManifest.supportUrl, sourceManifest.visual.supportUrl);
+  assert.equal(releaseManifest.authorEmail, sourceManifest.author.email);
+  assert.match(releaseManifest.privacyPolicyUrl, /^https:\/\//);
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.path, "assets/partner-center-logo.png");
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.width, 300);
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.height, 300);
+  assert.equal(releaseManifest.publicationAssets.eula, "EULA.md");
+  assert.equal(
+    releaseManifest.publicationAssets.submissionDossier,
+    "docs/partner-center-submission.md"
+  );
+
+  const screenshots = releaseManifest.publicationAssets.screenshots;
+  assert.ok(
+    Array.isArray(screenshots) && screenshots.length >= 1 && screenshots.length <= 5,
+    "the release manifest must record between 1 and 5 Partner Center screenshots"
+  );
+  for (const screenshot of screenshots) {
+    assert.match(screenshot.path, /^assets\/screenshots\/.+\.png$/);
+    assert.equal(screenshot.width, 1366, `${screenshot.path} must be 1366 wide`);
+    assert.equal(screenshot.height, 768, `${screenshot.path} must be 768 tall`);
+    assert.ok(
+      screenshot.bytes <= 1024 * 1024,
+      `${screenshot.path} must stay within the 1024 KB Partner Center limit`
+    );
+  }
+}
+
+// A visual whose compiled stylesheet is missing renders unstyled in the host,
+// so the packaged CSS payload is part of the release contract.
+const packagedResources = JSON.parse(
+  fs.readFileSync(path.join(root, ".tmp/drop/pbiviz.json"), "utf8")
+);
+assert.ok(
+  typeof packagedResources.content?.css === "string" && packagedResources.content.css.includes(".atlyn-root"),
+  "the packaged bundle must embed the compiled stylesheet"
+);
+assert.ok(
+  typeof packagedResources.content?.js === "string" && packagedResources.content.js.length > 0,
+  "the packaged bundle must embed the compiled script"
+);
+
+// The sample report embeds a copy of this very package as a private custom
+// visual. If that copy drifts, the sample would demo a different build than the
+// one being submitted, so compare it against the archive just produced.
+const sampleVisualDirectory = path.join(
+  root,
+  "samples",
+  "AtlynHierarchyExplorerSample.Report",
+  "CustomVisuals",
+  sourceManifest.visual.guid
+);
+if (fs.existsSync(sampleVisualDirectory)) {
+  const embeddedEntries = ["package.json", `resources/${sourceManifest.visual.guid}.pbiviz.json`];
+  JSZip.loadAsync(archive)
+    .then(async (zip) => {
+      for (const entry of embeddedEntries) {
+        const packaged = await zip.file(entry)?.async("nodebuffer");
+        assert.ok(packaged, `the package must contain ${entry}`);
+        const committed = fs.readFileSync(path.join(sampleVisualDirectory, ...entry.split("/")));
+        assert.ok(
+          packaged.equals(committed),
+          `samples/.../CustomVisuals/${sourceManifest.visual.guid}/${entry} is stale; run "npm run sample-report"`
+        );
+      }
+      console.log(`Verified the sample report embeds the current ${packageName}`);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
 }
 
 console.log(`Verified ${packageName} (${fs.statSync(packagePath).size} bytes)`);

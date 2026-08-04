@@ -58,6 +58,8 @@ describe("certification-first package contract", () => {
     expect(packageJson.scripts["validate-publication-assets"]).toBe(
       "node scripts/validate-publication-assets.cjs"
     );
+    expect(packageJson.scripts.screenshots).toBe("node scripts/capture-submission-screenshots.cjs");
+    expect(packageJson.scripts["sample-report"]).toBe("node scripts/build-sample-report.cjs");
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
     expect(packageJson.scripts["verify-reproducible-package"]).toBe(
       "node scripts/verify-reproducible-package.cjs"
@@ -67,11 +69,73 @@ describe("certification-first package contract", () => {
     expect(packageJson.dependencies["powerbi-visuals-api"]).toBe("5.11.0");
     expect(packageJson.devDependencies["powerbi-visuals-tools"]).toBe("7.2.1");
     expect(packageJson.overrides.uuid).toBe("11.1.1");
+    // hono reaches the tree through powerbi-visuals-tools -> @modelcontextprotocol/sdk.
+    // 4.12.34 is the smallest version that fixes GHSA-8j4g-w8fx-2239.
+    expect(packageJson.overrides.hono).toBe("4.12.34");
+    // Rendering the screenshots needs a browser, which CI never does. Keeping
+    // Playwright out of the manifest keeps it off the `npm audit` surface.
+    expect(packageJson.devDependencies).not.toHaveProperty("playwright");
+    expect(packageJson.dependencies).not.toHaveProperty("playwright");
     expect(pbiviz.visual.version).toBe(`${packageJson.version}.0`);
     expect(pbiviz.author.email).not.toContain(".example");
     expect(pbiviz.visual.supportUrl).toMatch(/^https:\/\//);
-    expect(pbiviz.visual.gitHubUrl).toBe(pbiviz.visual.supportUrl);
+    expect(pbiviz.visual.gitHubUrl).toBe("https://github.com/garrett-hamers/powerbi-hierarchy-explorer");
     expect(fs.existsSync(path.join(root, "assets", "partner-center-logo.png"))).toBe(true);
+  });
+
+  test("carries the metadata and assets an AppSource submission requires", () => {
+    const pbiviz = JSON.parse(fs.readFileSync(path.join(root, "pbiviz.json"), "utf8"));
+
+    // The GUID is already recorded in the storefront release manifest and in
+    // published download paths, so it must never move.
+    expect(pbiviz.visual.guid).toBe("atlynHierarchyExplorer");
+    expect(pbiviz.visual.name).toBe("AtlynHierarchyExplorer");
+    expect(pbiviz.visual.displayName).toBe("Atlyn Hierarchy Explorer");
+    expect(pbiviz.visual.version).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+    expect(pbiviz.visual.description.length).toBeGreaterThanOrEqual(30);
+    expect(pbiviz.visual.supportUrl).toBe("https://atlyn.io/contact");
+    expect(pbiviz.author.name).toBe("Atlyn");
+    expect(pbiviz.author.email).toBe("atlyn.help@gmail.com");
+    expect(pbiviz.author.email).not.toMatch(/noreply|no-reply/i);
+
+    expect(fs.existsSync(path.join(root, "EULA.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "docs", "partner-center-submission.md"))).toBe(true);
+    expect(
+      fs.existsSync(path.join(root, "samples", "AtlynHierarchyExplorerSample.pbip"))
+    ).toBe(true);
+
+    const screenshots = fs
+      .readdirSync(path.join(root, "assets", "screenshots"))
+      .filter((file) => file.endsWith(".png"));
+    expect(screenshots.length).toBeGreaterThanOrEqual(1);
+    expect(screenshots.length).toBeLessThanOrEqual(5);
+
+    // The dossier is the submission form in text; drift between it and the
+    // manifest is how a wrong URL reaches Partner Center.
+    const dossier = fs.readFileSync(path.join(root, "docs", "partner-center-submission.md"), "utf8");
+    for (const value of [
+      pbiviz.visual.guid,
+      pbiviz.visual.version,
+      pbiviz.visual.supportUrl,
+      pbiviz.author.email,
+      "https://atlyn.io/legal/privacy",
+      "EULA.md",
+      "AppSource listing: Free",
+      "samples/AtlynHierarchyExplorerSample.pbip"
+    ]) {
+      expect(dossier).toContain(value);
+    }
+  });
+
+  test("ships the compiled stylesheet inside the package", () => {
+    const source = fs.readFileSync(path.join(root, "src", "visual.ts"), "utf8");
+    // powerbi-visuals-tools 7.x only bundles LESS reached from the entry point;
+    // the legacy `style` field alone produces an empty stylesheet and the visual
+    // renders unstyled in the host.
+    expect(source).toContain('import "./../style/visual.less";');
+    expect(JSON.parse(fs.readFileSync(path.join(root, "pbiviz.json"), "utf8")).style).toBe(
+      "style/visual.less"
+    );
   });
 
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {

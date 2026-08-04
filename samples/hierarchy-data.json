@@ -1,0 +1,39 @@
+{
+  "table": "Hierarchy",
+  "description": "Offline sample hierarchy for the AppSource sample report. It is a DAX calculated table built with DATATABLE, so the model has no data source at all: nothing can prompt for credentials and there is no refresh dependency. The organisation is invented for the listing and matches the dataset used for the store screenshots.",
+  "columns": [
+    { "name": "NodeId", "dataType": "string" },
+    { "name": "ParentId", "dataType": "string" },
+    { "name": "Label", "dataType": "string" },
+    { "name": "Subtitle", "dataType": "string" },
+    { "name": "Category", "dataType": "string" },
+    { "name": "Revenue", "dataType": "double" },
+    { "name": "Headcount", "dataType": "int64" }
+  ],
+  "rows": [
+    ["ops", null, "Meridian Worldwide", "All regions \u00b7 $48.2M \u00b7 1,284 people", "Company", 48200000, 1284],
+    ["na", "ops", "North America", "Region \u00b7 $21.4M \u00b7 512 people", "Region", 21400000, 512],
+    ["emea", "ops", "Europe & Middle East", "Region \u00b7 $16.9M \u00b7 448 people", "Region", 16900000, 448],
+    ["apac", "ops", "Asia Pacific", "Region \u00b7 $9.9M \u00b7 324 people", "Region", 9900000, 324],
+    ["na-ent", "na", "Enterprise Sales", "Division \u00b7 $12.6M \u00b7 214 people", "Division", 12600000, 214],
+    ["na-com", "na", "Commercial Sales", "Division \u00b7 $8.8M \u00b7 298 people", "Division", 8800000, 298],
+    ["eu-ent", "emea", "Enterprise Sales", "Division \u00b7 $10.1M \u00b7 205 people", "Division", 10100000, 205],
+    ["eu-com", "emea", "Commercial Sales", "Division \u00b7 $6.8M \u00b7 243 people", "Division", 6800000, 243],
+    ["ap-ent", "apac", "Enterprise Sales", "Division \u00b7 $9.9M \u00b7 324 people", "Division", 9900000, 324],
+    ["na-ne", "na-ent", "Northeast Team", "Team \u00b7 $7.1M \u00b7 118 people", "Team", 7100000, 118],
+    ["na-w", "na-ent", "West Team", "Team \u00b7 $5.5M \u00b7 96 people", "Team", 5500000, 96],
+    ["eu-dach", "eu-ent", "DACH Team", "Team \u00b7 $5.9M \u00b7 112 people", "Team", 5900000, 112],
+    ["eu-uki", "eu-ent", "UK & Ireland Team", "Team \u00b7 $4.2M \u00b7 93 people", "Team", 4200000, 93],
+    ["na-ne-ren", "na-ne", "Renewals Pod", "Pod \u00b7 $2.4M \u00b7 41 people", "Pod", 2400000, 41],
+    ["na-ne-new", "na-ne", "New Business Pod", "Pod \u00b7 $4.7M \u00b7 77 people", "Pod", 4700000, 77]
+  ],
+  "roleBindings": {
+    "NodeId": { "column": "NodeId" },
+    "ParentId": { "column": "ParentId" },
+    "Label": { "column": "Label" },
+    "Subtitle": { "column": "Subtitle" },
+    "Category": { "column": "Category" },
+    "Value": { "column": "Revenue", "aggregate": "Sum" },
+    "Tooltips": { "column": "Headcount", "aggregate": "Sum" }
+  }
+}

@@ -96,6 +96,43 @@ function updateVisual(
 }
 
 describe("Visual interactions and lifecycle", () => {
+  test("keeps the caret in the search box while typing", () => {
+    const { host } = makeHost();
+    // Focus only moves for elements attached to the document in jsdom.
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const visual = new Visual({ element, host } as any);
+    visual.update({ dataViews: [tableDataView()], viewport: { width: 400, height: 300 } } as any);
+    const search = element.querySelector(".atlyn-search") as HTMLInputElement;
+
+    // Search reveals the first match on every keystroke. It must not pull DOM
+    // focus into the tree, or the caret leaves the box after one character.
+    search.focus();
+    for (const character of "Chi") {
+      search.value += character;
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(document.activeElement).toBe(search);
+    }
+
+    expect(search.value).toBe("Chi");
+    expect(element.querySelectorAll('[data-search-match="true"]').length).toBe(2);
+    visual.destroy();
+    element.remove();
+  });
+
+  test("keeps the accessible tree beside the canvas rather than inside it", () => {
+    const { host } = makeHost();
+    const { element, visual } = updateVisual(host, tableDataView());
+    const tree = element.querySelector('[role="tree"]') as HTMLElement;
+    const canvas = element.querySelector(".atlyn-canvas-wrap") as HTMLElement;
+
+    // Nested inside the scrolling canvas the focused tree renders below the
+    // full-height graph, pushing it outside the clipped bounds of the visual.
+    expect(canvas.contains(tree)).toBe(false);
+    expect(tree.parentElement).toBe(element.querySelector(".atlyn-root"));
+    visual.destroy();
+  });
+
   test("uses one semantic tree and documented selection/context-menu contracts", () => {
     const { host, selectionManager } = makeHost();
     const { element, visual } = updateVisual(host, tableDataView());

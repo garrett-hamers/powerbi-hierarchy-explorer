@@ -1,0 +1,12 @@
+# The sample report embeds a byte-exact copy of the built .pbiviz, and
+# verify-package compares those files against the archive it just produced.
+# Line-ending conversion would break that comparison on some checkouts.
+samples/**/CustomVisuals/** -text
+
+# Power BI writes the project definition as UTF-8; keep it stable across
+# platforms so regenerating the sample never shows a whitespace-only diff.
+samples/**/*.json text eol=lf
+samples/**/*.tmdl text eol=lf
+samples/**/*.pbip text eol=lf
+samples/**/*.pbir text eol=lf
+samples/**/*.pbism text eol=lf

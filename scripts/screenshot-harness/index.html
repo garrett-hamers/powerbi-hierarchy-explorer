@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Atlyn Hierarchy Explorer - submission screenshot harness</title>
+    <link rel="stylesheet" href="frame.css" />
+  </head>
+  <body>
+    <!--
+      Offline capture harness for the AppSource submission screenshots.
+
+      This page never touches the network. scripts/capture-submission-screenshots.cjs
+      opens it over file://, then injects the compiled stylesheet and script straight
+      out of .tmp/drop/pbiviz.json - the exact bytes that ship inside the .pbiviz -
+      and drives real interactions before each screenshot. Nothing in this folder
+      draws the visual; it only supplies a mock host, offline data, and the caption
+      strip around the render.
+    -->
+    <div class="frame">
+      <header class="frame-caption">
+        <span class="frame-mark" aria-hidden="true"></span>
+        <span class="frame-titles">
+          <span class="frame-title">Atlyn Hierarchy Explorer</span>
+          <span class="frame-subtitle" id="caption"></span>
+        </span>
+      </header>
+      <div class="frame-stage"><div id="visual-host"></div></div>
+    </div>
+    <script src="host.js"></script>
+    <script src="data.js"></script>
+    <script src="boot.js"></script>
+  </body>
+</html>

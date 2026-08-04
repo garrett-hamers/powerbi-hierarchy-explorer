@@ -28,6 +28,7 @@
   height: 100%;
   min-height: 96px;
   overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
@@ -41,6 +42,7 @@
   align-items: center;
   border-bottom: 1px solid var(--atlyn-border);
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 6px;
   min-height: 38px;
@@ -87,12 +89,19 @@
 
 .atlyn-status {
   color: var(--atlyn-muted);
+  flex: 0 0 auto;
   min-height: 24px;
   padding: 4px 8px;
 }
 
+/*
+ * The strips above the canvas keep their natural height so a data quality
+ * message is never sliced in half when the canvas is under vertical pressure;
+ * only .atlyn-canvas-wrap absorbs the remaining space.
+ */
 .atlyn-diagnostics {
   border-bottom: 1px solid var(--atlyn-border);
+  flex: 0 0 auto;
   max-height: 86px;
   overflow: auto;
   padding: 4px 8px;
@@ -112,6 +121,7 @@
 
 .atlyn-breadcrumb {
   color: var(--atlyn-muted);
+  flex: 0 0 auto;
   min-height: 25px;
   overflow: hidden;
   padding: 4px 8px;
@@ -177,10 +187,17 @@
   width: 1px;
 }
 
+/*
+ * When the tree takes focus it rejoins the flow as a fixed-size pane. Without
+ * flex: 0 0 auto the canvas keeps its full content height, pushes the tree past
+ * the clipped bottom edge of .atlyn-root, and a keyboard user is left focused on
+ * an item they cannot see.
+ */
 .atlyn-semantic-tree:focus-within {
   border-top: 1px solid var(--atlyn-border);
   clip: auto;
   clip-path: none;
+  flex: 0 0 auto;
   height: auto;
   margin: 0;
   max-height: 38%;
@@ -191,12 +208,17 @@
   width: auto;
 }
 
+/*
+ * Every row reserves the toggle column so leaves line up under their parents;
+ * without the reservation a childless node sits further left than the node it
+ * belongs to. The toggle is pulled back into that reserved space.
+ */
 .atlyn-semantic-item {
   align-items: center;
   display: flex;
   gap: 4px;
   min-height: 25px;
-  padding-inline-start: calc((var(--atlyn-level) - 1) * 17px);
+  padding-inline-start: calc((var(--atlyn-level) - 1) * 17px + 32px);
 }
 
 .atlyn-semantic-item[aria-selected="true"] {
@@ -219,6 +241,7 @@
   border: 0;
   color: inherit;
   cursor: pointer;
+  margin-inline-start: -32px;
   min-height: 32px;
   min-width: 32px;
 }

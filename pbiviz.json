@@ -5,14 +5,14 @@
     "guid": "atlynHierarchyExplorer",
     "visualClassName": "Visual",
     "version": "1.0.0.0",
-    "description": "Accessible, diagnostic-first parent-child hierarchy exploration.",
-    "supportUrl": "https://github.com/garrett-hamers/powerbi-hierarchy-explorer",
+    "description": "Explore parent-child hierarchies with an accessible tree, search, expand and collapse, breadcrumbs, and diagnostics that surface orphans, cycles, and duplicate IDs instead of hiding them.",
+    "supportUrl": "https://atlyn.io/contact",
     "gitHubUrl": "https://github.com/garrett-hamers/powerbi-hierarchy-explorer"
   },
   "apiVersion": "5.11.0",
   "author": {
     "name": "Atlyn",
-    "email": "garrett-hamers@users.noreply.github.com"
+    "email": "atlyn.help@gmail.com"
   },
   "assets": {
     "icon": "assets/icon.png"

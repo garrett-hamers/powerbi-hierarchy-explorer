@@ -31,9 +31,37 @@ Visual metadata is stable at GUID `atlynHierarchyExplorer` with
 `privileges: []`. The package uses no network access, external assets, unsafe
 HTML, dynamic code, or user photos. This repository does not claim Microsoft
 certification or substitute for validation in a real Power BI host.
-Partner Center publication assets include `assets/partner-center-logo.png`
-(300x300 PNG derived from the visual source icon and validated in release
-scripts).
+
+## Publication assets
+
+AppSource / Partner Center submission material lives alongside the source and is
+validated on every build by `npm run validate-publication-assets`:
+
+- `assets/partner-center-logo.png` - 300x300 PNG derived from the visual source
+  icon.
+- `assets/screenshots/*.png` - three 1366x768 PNGs, each under 1024 KB. They are
+  real renders of the packaged bundle driven by native browser input, not
+  mock-ups; see `scripts/screenshot-harness/`.
+- `EULA.md` - end user licence, granting the same permissive MIT terms as
+  `LICENSE`.
+- `samples/AtlynHierarchyExplorerSample.pbip` - the offline sample report, as a
+  Power BI Project whose data is a DAX `DATATABLE` calculated table (no data
+  source, so no credential prompt) and with this visual embedded as a private
+  custom visual. Rebuild it with `npm run package && npm run sample-report`. The
+  `.pbix` Partner Center wants is produced from it with one *Save As* in Power BI
+  Desktop.
+- `docs/partner-center-submission.md` - every Partner Center field with its final
+  value, plus the manual steps that remain.
+
+Regenerating the screenshots needs a browser, which is deliberately not a
+dependency of this package so CI neither installs nor audits it:
+
+```text
+npm install --no-save playwright
+npx playwright install chromium
+npm run package
+npm run screenshots
+```
 
 ## Development
 
@@ -42,7 +70,6 @@ npm ci
 npm test
 npm run typecheck
 npm run eslint
-npm test
 npm run package
 npm run verify-reproducible-package
 npm run certification-audit
