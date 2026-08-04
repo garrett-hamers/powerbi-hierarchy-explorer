@@ -59,6 +59,7 @@ describe("certification-first package contract", () => {
       "node scripts/validate-publication-assets.cjs"
     );
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-submission-screenshots.cjs");
+    expect(packageJson.scripts["sample-report"]).toBe("node scripts/build-sample-report.cjs");
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
     expect(packageJson.scripts["verify-reproducible-package"]).toBe(
       "node scripts/verify-reproducible-package.cjs"
@@ -99,6 +100,9 @@ describe("certification-first package contract", () => {
 
     expect(fs.existsSync(path.join(root, "EULA.md"))).toBe(true);
     expect(fs.existsSync(path.join(root, "docs", "partner-center-submission.md"))).toBe(true);
+    expect(
+      fs.existsSync(path.join(root, "samples", "AtlynHierarchyExplorerSample.pbip"))
+    ).toBe(true);
 
     const screenshots = fs
       .readdirSync(path.join(root, "assets", "screenshots"))
@@ -115,7 +119,9 @@ describe("certification-first package contract", () => {
       pbiviz.visual.supportUrl,
       pbiviz.author.email,
       "https://atlyn.io/legal/privacy",
-      "EULA.md"
+      "EULA.md",
+      "AppSource listing: Free",
+      "samples/AtlynHierarchyExplorerSample.pbip"
     ]) {
       expect(dossier).toContain(value);
     }

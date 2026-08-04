@@ -34,6 +34,10 @@ const EULA = "EULA.md";
 const DOSSIER = "docs/partner-center-submission.md";
 const SUPPORT_URL = "https://atlyn.io/contact";
 const PRIVACY_POLICY_URL = "https://atlyn.io/legal/privacy";
+// Owner decision: the visual is listed free and monetised only through the
+// Atlyn storefront subscription. Recorded here so the dossier cannot lose it.
+const LISTING_PRICING = "AppSource listing: Free";
+const SAMPLE_PROJECT = "samples/AtlynHierarchyExplorerSample.pbip";
 
 // A single flat rectangle is what a fabricated placeholder looks like; genuine
 // artwork always clears these thresholds. Screenshots contain antialiased text,
@@ -170,11 +174,25 @@ if (!fs.existsSync(screenshotDirectory)) {
 requireText(EULA, "The AppSource EULA");
 const dossier = requireText(DOSSIER, "The Partner Center submission dossier");
 if (dossier) {
-  for (const value of [SUPPORT_URL, PRIVACY_POLICY_URL, visual.guid, visual.version, EULA]) {
+  for (const value of [
+    SUPPORT_URL,
+    PRIVACY_POLICY_URL,
+    visual.guid,
+    visual.version,
+    EULA,
+    LISTING_PRICING,
+    SAMPLE_PROJECT
+  ]) {
     if (typeof value === "string" && !dossier.includes(value)) {
       fail(`${DOSSIER} must record "${value}" so the submission form and the repository cannot drift`);
     }
   }
+}
+
+// Partner Center requires an offline sample report. The .pbix itself is produced
+// by the owner in Power BI Desktop, but the project it is saved from lives here.
+if (!fs.existsSync(path.join(root, SAMPLE_PROJECT))) {
+  fail(`the offline sample report project is required but ${SAMPLE_PROJECT} is missing`);
 }
 
 // --- Report -------------------------------------------------------------------
@@ -190,3 +208,4 @@ for (const screenshot of screenshots) {
   );
 }
 console.log(`Validated ${EULA}, ${DOSSIER}, support ${SUPPORT_URL}, privacy ${PRIVACY_POLICY_URL}`);
+console.log(`Validated ${SAMPLE_PROJECT} and "${LISTING_PRICING}"`);

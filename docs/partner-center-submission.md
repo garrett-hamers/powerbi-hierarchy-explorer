@@ -26,6 +26,22 @@ records what has been prepared and what a human still has to do.
 > storefront release manifest and in published download paths. Changing it
 > creates a different visual as far as Power BI and AppSource are concerned.
 
+### Licensing
+
+**AppSource listing: Free.**
+
+The visual is published to AppSource at no charge. Do **not** configure a paid,
+transactable, or "free trial" offer in Partner Center, and do not add licence
+checks, entitlement calls, or a paywall to the visual: it declares
+`"privileges": []` and makes no network calls, so it could not perform them
+anyway.
+
+AppSource licensing is entirely separate from the Atlyn storefront subscription.
+Monetisation happens only at <https://atlyn.io> through the Stripe subscription
+there. The AppSource listing is a free distribution channel for the visual
+itself and confers no storefront entitlement, and a storefront subscription is
+not required to use the AppSource build.
+
 The built package is `dist/atlynHierarchyExplorer.1.0.0.0.pbiviz`, named
 `{guid}.{version}.pbiviz`. It is reproducible: two clean builds from the same
 source and lockfile produce identical bytes and the same SHA-256, which
@@ -43,7 +59,8 @@ version, support and privacy URLs, author email, and every publication asset.
 | Privacy policy URL, https | `https://atlyn.io/legal/privacy` | Live. |
 | EULA | `EULA.md` | Present. Grants the same permissive MIT terms as `LICENSE`. |
 | Terms of use (reference) | `https://atlyn.io/legal/terms` | Live, referenced from `EULA.md`. |
-| Sample `.pbix` report, fully offline | **Not in this repository** | **Blocked - see section 5.** |
+| Pricing | Free | No transactable offer. See Licensing above. |
+| Sample report, fully offline | `samples/AtlynHierarchyExplorerSample.pbip` | Project committed. The `.pbix` itself needs one manual Power BI Desktop step - see section 3. |
 
 Use `https://atlyn.io/legal/privacy` and `https://atlyn.io/legal/terms` exactly.
 `https://atlyn.io/privacy`, `/support` and `/terms` return 404 and must not be
@@ -77,7 +94,66 @@ font rasterisation differs between machines. What is enforced is exact
 dimensions, the 1024 KB ceiling, PNG structure, and that the image is not a flat
 placeholder.
 
-## 3. Privacy and permissions posture
+## 3. Sample report
+
+Partner Center requires a sample report that "works fully offline with no
+external connections". This repository ships it as a Power BI Project:
+
+```text
+samples/AtlynHierarchyExplorerSample.pbip
+samples/AtlynHierarchyExplorerSample.Report/          PBIR report definition
+samples/AtlynHierarchyExplorerSample.SemanticModel/   TMDL model, inline data
+samples/hierarchy-data.json                           the rows, in one place
+```
+
+Rebuild it at any time with `npm run package && npm run sample-report`. The
+generator derives the visual GUID from `pbiviz.json` and the data-role bindings
+from `capabilities.json`, so the sample cannot drift from the visual it demos,
+and `npm run verify-package` fails the build if the embedded copy of the
+`.pbiviz` is stale.
+
+### Why it is offline
+
+- The model has a single import partition built from an inline Power Query
+  `#table` of literal rows. There is no SQL, web, file, folder, OData or
+  SharePoint source anywhere in it, so a refresh needs no gateway and no
+  credentials. `tests/sample-report.test.ts` asserts this.
+- The visual is embedded as a **private custom visual** under
+  `AtlynHierarchyExplorerSample.Report/CustomVisuals/atlynHierarchyExplorer/`,
+  registered through `resourcePackages` in `report.json`. Microsoft loads
+  AppSource and organisational visuals automatically from the store instead, so
+  `publicCustomVisuals` would require a connection; the tests assert it is
+  absent.
+- All seven data roles are bound: `NodeId`, `ParentId`, `Label`, `Subtitle` and
+  `Category` project columns, while `Value` and `Tooltips` use a `Sum`
+  aggregation.
+
+### The one manual step: producing the .pbix
+
+A `.pbix` cannot be generated outside Power BI Desktop. Its model is stored as a
+binary Analysis Services backup image - the same reason `pbi-tools compile`
+supports PBIX output only for report-only ("thin") projects and PBIT otherwise.
+So the project is committed and the `.pbix` is produced once, by hand:
+
+1. In Power BI Desktop, go to **File > Options and settings > Options > Preview
+   features** and enable **Power BI Project (.pbip) save option** and **Store
+   reports using enhanced metadata format (PBIR)**. Restart Desktop. Both are
+   still preview features.
+2. Open `samples/AtlynHierarchyExplorerSample.pbip`.
+3. Let the model refresh. It should complete with no credential prompt; if
+   Desktop asks for one, something external crept into the model and the sample
+   is no longer valid.
+4. Confirm the visual renders the hierarchy on the **Hierarchy overview** page.
+5. **File > Save As** and choose `.pbix`. Keep it outside the repository - the
+   `.pbix` is a build output and is deliberately not committed.
+6. Upload that `.pbix` to Partner Center as the sample report.
+
+Desktop may normalise the project files when it saves. That is expected; rerun
+`npm run sample-report` to restore the canonical generated state. Opening the
+project also writes `.pbi/cache.abf`, an Analysis Services backup containing the
+model *and its data* - `.gitignore` already excludes it.
+
+## 4. Privacy and permissions posture
 
 Useful when answering the Partner Center certification questionnaire:
 
@@ -91,7 +167,7 @@ Useful when answering the Partner Center certification questionnaire:
 - `dependencies.json` declares no external dependencies, and the only runtime
   package dependency is `powerbi-visuals-api`.
 
-## 4. Commands
+## 5. Commands
 
 ```text
 npm ci
@@ -99,6 +175,7 @@ npm test
 npm run typecheck
 npm run eslint
 npm run package                     # build, normalise, verify, validate assets, write manifest
+npm run sample-report               # regenerate the offline sample project
 npm run verify-reproducible-package # two clean builds must match byte for byte
 npm run certification-audit
 npm audit
@@ -123,31 +200,30 @@ npm run package
 npm run screenshots
 ```
 
-## 5. Remaining manual steps (owner only)
+## 6. Remaining manual steps (owner only)
 
 These cannot be completed from this repository and are not simulated here.
 
-1. **Produce the sample `.pbix`.** Partner Center requires a sample report that
-   works fully offline with no external connections. A `.pbix` embeds a compiled
-   tabular model and can only be authored in Power BI Desktop. Build a report
-   that imports the hierarchy as static/entered data (no gateway, no live
-   connection, no web source), drop in the packaged visual, bind NodeId,
-   ParentId, Label, Subtitle, Category, Value and Tooltips, and save it. The
-   dataset in `scripts/screenshot-harness/data.js` is a ready-made basis.
+1. **Produce the sample `.pbix`** by opening
+   `samples/AtlynHierarchyExplorerSample.pbip` in Power BI Desktop and doing
+   *Save As* - the full procedure is in section 3. The project, its offline data
+   and the embedded visual are already built and validated; only this one
+   Desktop step is left.
 2. **Create or confirm the Partner Center account** and complete publisher
    verification for Atlyn.
 3. **Upload** `dist/atlynHierarchyExplorer.1.0.0.0.pbiviz` from a clean
    `npm run package`, together with the sample `.pbix`, the logo and the three
    screenshots.
 4. **Enter the listing text** - short and long description, category, supported
-   languages - and the support, privacy and EULA values from section 1 and 2.
+   languages - and the support, privacy and EULA values from sections 1 and 2.
+   Set the offer to **free**; do not configure a transactable offer.
 5. **Submit for Microsoft review.** Everything in this repository is
    preparation; approval, certification status and store listing are decided by
    Microsoft and are not claimed here.
 
-## 6. Kept in sync
+## 7. Kept in sync
 
 `scripts/validate-publication-assets.cjs` cross-checks this document against
 `pbiviz.json` on every build and fails if the support URL, privacy policy URL,
-GUID, version or EULA path recorded above stops matching the repository. Update
-both together.
+GUID, version, EULA path, free-listing decision or sample project path recorded
+above stops matching the repository. Update both together.

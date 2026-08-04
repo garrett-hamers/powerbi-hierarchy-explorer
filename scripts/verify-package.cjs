@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const JSZip = require("jszip");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
@@ -110,5 +111,36 @@ assert.ok(
   typeof packagedResources.content?.js === "string" && packagedResources.content.js.length > 0,
   "the packaged bundle must embed the compiled script"
 );
+
+// The sample report embeds a copy of this very package as a private custom
+// visual. If that copy drifts, the sample would demo a different build than the
+// one being submitted, so compare it against the archive just produced.
+const sampleVisualDirectory = path.join(
+  root,
+  "samples",
+  "AtlynHierarchyExplorerSample.Report",
+  "CustomVisuals",
+  sourceManifest.visual.guid
+);
+if (fs.existsSync(sampleVisualDirectory)) {
+  const embeddedEntries = ["package.json", `resources/${sourceManifest.visual.guid}.pbiviz.json`];
+  JSZip.loadAsync(archive)
+    .then(async (zip) => {
+      for (const entry of embeddedEntries) {
+        const packaged = await zip.file(entry)?.async("nodebuffer");
+        assert.ok(packaged, `the package must contain ${entry}`);
+        const committed = fs.readFileSync(path.join(sampleVisualDirectory, ...entry.split("/")));
+        assert.ok(
+          packaged.equals(committed),
+          `samples/.../CustomVisuals/${sourceManifest.visual.guid}/${entry} is stale; run "npm run sample-report"`
+        );
+      }
+      console.log(`Verified the sample report embeds the current ${packageName}`);
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
+}
 
 console.log(`Verified ${packageName} (${fs.statSync(packagePath).size} bytes)`);

@@ -47,8 +47,18 @@ packages are intentionally not committed.
    rasterisation differs; the enforced contract is exact 1366x768 dimensions,
    the 1024 KB ceiling, PNG structure, and non-placeholder content.
 5. Review `docs/partner-center-submission.md` before submitting. It holds every
-   Partner Center field with its final value and the manual steps that remain,
-   including the sample `.pbix`, which can only be authored in Power BI Desktop.
+   Partner Center field with its final value and the manual steps that remain.
+   If the visual changed, regenerate the offline sample report so it demos the
+   build being submitted:
+
+   ```text
+   npm run sample-report
+   ```
+
+   `npm run verify-package` fails if the copy of the `.pbiviz` embedded in
+   `samples/` is stale. The `.pbix` Partner Center uploads is produced from that
+   project with one *Save As* in Power BI Desktop; it cannot be generated
+   headlessly and is deliberately not committed.
 6. After the final change is merged to `main`, create the lowercase
    `certification` branch from that exact commit when a reviewer needs a
    submission snapshot.

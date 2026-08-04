@@ -3,3 +3,9 @@ dist/
 .tmp/
 webpack.statistics.prod.html
 *.pbiviz
+
+# Power BI Desktop local state written when the sample PBIP is opened.
+# cache.abf is an Analysis Services backup of the model *and its data*.
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+**/.pbi/unappliedChanges.json

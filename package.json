@@ -16,6 +16,7 @@
     "verify-package": "node scripts/verify-package.cjs",
     "validate-publication-assets": "node scripts/validate-publication-assets.cjs",
     "screenshots": "node scripts/capture-submission-screenshots.cjs",
+    "sample-report": "node scripts/build-sample-report.cjs",
     "release-manifest": "node scripts/write-release-manifest.cjs",
     "verify-reproducible-package": "node scripts/verify-reproducible-package.cjs",
     "start": "pbiviz start",
