@@ -138,6 +138,22 @@ describe("certification-first package contract", () => {
     );
   });
 
+  test("pins embedded text assets to LF so the package cannot depend on checkout", () => {
+    const gitattributes = fs.readFileSync(path.join(root, ".gitattributes"), "utf8");
+
+    // core.autocrlf hands Windows a CRLF working copy of files the repository
+    // stores as LF. Any asset that reaches the package verbatim rather than
+    // being parsed would then hash differently on Windows and Linux from the
+    // same commit, and verify-reproducible-package cannot catch it because it
+    // only compares two builds on one machine.
+    for (const rule of ["*.resjson text eol=lf", "*.svg text eol=lf", "*.less text eol=lf"]) {
+      expect(gitattributes).toContain(rule);
+    }
+    // The sample report's embedded copy of the package is compared byte for
+    // byte, so it must never be converted at all.
+    expect(gitattributes).toContain("samples/**/CustomVisuals/** -text");
+  });
+
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {
     const source = fs
       .readdirSync(path.join(root, "src"))

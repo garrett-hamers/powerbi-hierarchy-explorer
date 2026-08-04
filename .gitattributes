@@ -10,3 +10,19 @@ samples/**/*.tmdl text eol=lf
 samples/**/*.pbip text eol=lf
 samples/**/*.pbir text eol=lf
 samples/**/*.pbism text eol=lf
+
+# Text assets that pbiviz embeds into the package. core.autocrlf gives Windows
+# a CRLF working copy of files the repository stores as LF, so any asset that
+# reaches the package verbatim rather than being parsed and re-serialised would
+# hash differently on Windows and Linux from the very same commit. Pinning them
+# to LF removes that dependency.
+#
+# This repository is not currently affected - a Windows build and the Linux CI
+# runner produce the same SHA-256 for the same commit - because pbiviz parses
+# these files rather than copying them. That is a property of the tool, not a
+# guarantee, and npm run verify-reproducible-package cannot detect a regression
+# because it only compares two builds on one machine.
+*.resjson text eol=lf
+*.svg text eol=lf
+*.less text eol=lf
+
