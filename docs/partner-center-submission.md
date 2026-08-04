@@ -127,6 +127,29 @@ from `capabilities.json`, so the sample cannot drift from the visual it demos,
 and `npm run verify-package` fails the build if the embedded copy of the
 `.pbiviz` is stale.
 
+### Verification status: what has and has not been checked
+
+**This project has never been opened in Power BI Desktop.** Nothing here
+demonstrates that Desktop loads it. Opening it is step 1 of section 6, and that
+step is also the first real test of the project.
+
+What *has* been established:
+
+| Check | Evidence |
+| --- | --- |
+| Required PBIR and PBIP parts exist, and are valid JSON | `tests/sample-report.test.ts` |
+| `visualType` equals the `pbiviz.json` GUID | test |
+| Every `queryState` key is a `capabilities.json` data role, and all seven are bound | test |
+| The embedded visual is present and byte-identical to the built `.pbiviz` | `scripts/verify-package.cjs` |
+| No `publicCustomVisuals`, no connector or URL string in the model | test |
+| The report definition version is `2.0.0` | Confirmed against real published PBIR reports |
+| Schema URLs, versions, `visual.json` key sets and TMDL layout | Cross-checked against the peer Atlyn sample in the sibling `powerbi-scatter-chart` repository |
+
+That last row is **consistency evidence, not loadability evidence**. It shows
+this project agrees with a peer project generated the same way; it does not show
+that either one opens. Treat the first Desktop open as the verification step it
+is, and if it reports a blocking error, the file it names is the thing to fix.
+
 ### Why it is offline
 
 - The data is a **DAX calculated table** built with `DATATABLE`, not a Power
