@@ -14,7 +14,7 @@ records what has been prepared and what a human still has to do.
 | Visual name | `AtlynHierarchyExplorer` | `pbiviz.json` &rarr; `visual.name` |
 | Display name | `Atlyn Hierarchy Explorer` | `pbiviz.json` &rarr; `visual.displayName` |
 | GUID | `atlynHierarchyExplorer` | `pbiviz.json` &rarr; `visual.guid` |
-| Version (four-part) | `1.0.0.0` | `pbiviz.json` &rarr; `visual.version` |
+| Version (four-part) | `1.0.1.0` | `pbiviz.json` &rarr; `visual.version` |
 | Description | Explore parent-child hierarchies with an accessible tree, search, expand and collapse, breadcrumbs, and diagnostics that surface orphans, cycles, and duplicate IDs instead of hiding them. | `pbiviz.json` &rarr; `visual.description` |
 | Support URL | `https://atlyn.io/contact` | `pbiviz.json` &rarr; `visual.supportUrl` |
 | Author name | `Atlyn` | `pbiviz.json` &rarr; `author.name` |
@@ -42,12 +42,27 @@ there. The AppSource listing is a free distribution channel for the visual
 itself and confers no storefront entitlement, and a storefront subscription is
 not required to use the AppSource build.
 
-The built package is `dist/atlynHierarchyExplorer.1.0.0.0.pbiviz`, named
+The built package is `dist/atlynHierarchyExplorer.1.0.1.0.pbiviz`, named
 `{guid}.{version}.pbiviz`. It is reproducible: two clean builds from the same
 source and lockfile produce identical bytes and the same SHA-256, which
 `npm run verify-reproducible-package` proves. `dist/release-manifest.json`
 records the filename, byte length, uppercase SHA-256, source commit, GUID,
 version, support and privacy URLs, author email, and every publication asset.
+
+### 1.0.1.0 supersedes 1.0.0.0
+
+This version replaces the artifact currently in storefront Blob storage at:
+
+```text
+hierarchy-explorer/1.0.0.0/atlynHierarchyExplorer.1.0.0.0.pbiviz
+SHA-256 794002b1c08350faad04b67a1e4e734d1a34dbda3039d3831c6ac336fb131d61
+```
+
+The metadata, stylesheet and interaction fixes in `1.0.1.0` change the packaged
+bytes, so the version was bumped rather than republishing different bytes under
+the same version number. Publish the new artifact to the `1.0.1.0` Blob path and
+update the storefront release manifest to point at it. The GUID is unchanged, so
+download paths keyed on the GUID stay valid; only the version segment moves.
 
 ## 2. Listing assets
 
@@ -111,6 +126,29 @@ generator derives the visual GUID from `pbiviz.json` and the data-role bindings
 from `capabilities.json`, so the sample cannot drift from the visual it demos,
 and `npm run verify-package` fails the build if the embedded copy of the
 `.pbiviz` is stale.
+
+### Verification status: what has and has not been checked
+
+**This project has never been opened in Power BI Desktop.** Nothing here
+demonstrates that Desktop loads it. Opening it is step 1 of section 6, and that
+step is also the first real test of the project.
+
+What *has* been established:
+
+| Check | Evidence |
+| --- | --- |
+| Required PBIR and PBIP parts exist, and are valid JSON | `tests/sample-report.test.ts` |
+| `visualType` equals the `pbiviz.json` GUID | test |
+| Every `queryState` key is a `capabilities.json` data role, and all seven are bound | test |
+| The embedded visual is present and byte-identical to the built `.pbiviz` | `scripts/verify-package.cjs` |
+| No `publicCustomVisuals`, no connector or URL string in the model | test |
+| The report definition version is `2.0.0` | Confirmed against real published PBIR reports |
+| Schema URLs, versions, `visual.json` key sets and TMDL layout | Cross-checked against the peer Atlyn sample in the sibling `powerbi-scatter-chart` repository |
+
+That last row is **consistency evidence, not loadability evidence**. It shows
+this project agrees with a peer project generated the same way; it does not show
+that either one opens. Treat the first Desktop open as the verification step it
+is, and if it reports a blocking error, the file it names is the thing to fix.
 
 ### Why it is offline
 
@@ -245,7 +283,7 @@ These cannot be completed from this repository and are not simulated here.
    Desktop step is left.
 2. **Create or confirm the Partner Center account** and complete publisher
    verification for Atlyn.
-3. **Upload** `dist/atlynHierarchyExplorer.1.0.0.0.pbiviz` from a clean
+3. **Upload** `dist/atlynHierarchyExplorer.1.0.1.0.pbiviz` from a clean
    `npm run package`, together with the sample `.pbix`, the logo and the three
    screenshots.
 4. **Enter the listing text** - short and long description, category, supported

@@ -32,11 +32,15 @@ const PAGE_NAME = "pageHierarchyOverview";
 const VISUAL_NAME = "visualHierarchyOverview";
 
 /*
- * Schema versions and formats are pinned to match a Power BI Desktop project
- * that this Desktop build already opens successfully (the sibling Atlyn sample
- * in powerbi-scatter-chart), rather than being chosen from the schema index.
- * The report *definition* version "2.0.0" is what Desktop writes; do not confuse
- * it with the "4.0" in definition.pbir, which versions the report *item*.
+ * Schema versions and formats are pinned to match the peer sample project in the
+ * sibling powerbi-scatter-chart repository, so the Atlyn samples stay mutually
+ * consistent rather than each picking versions off the schema index. That is
+ * consistency evidence only: no generated project here has been opened in Power
+ * BI Desktop, so nothing below is proof that Desktop loads it.
+ *
+ * The report *definition* version "2.0.0" is the one value confirmed against
+ * real published PBIR reports; do not confuse it with the "4.0" in
+ * definition.pbir, which versions the report *item*.
  */
 const SCHEMA = {
   pbip: "https://developer.microsoft.com/json-schemas/fabric/pbip/pbipProperties/1.0.0/schema.json",
@@ -132,9 +136,10 @@ const lineageTag = (...parts) => {
 };
 
 /**
- * Emits the semantic model as TMDL, the format Power BI Desktop writes today and
- * the one the sibling Atlyn sample uses. Indentation is tabs, and the calculated
- * table expression is indented with four tabs, matching Desktop's own output.
+ * Emits the semantic model as TMDL, the documented folder format for a PBIP
+ * semantic model and the one the peer Atlyn sample also uses. Indentation is
+ * tabs and the calculated table expression is indented with four tabs, matching
+ * the convention in that peer project.
  */
 const writeSemanticModel = (modelDirectory, data) => {
   const definition = path.join(modelDirectory, "definition");
