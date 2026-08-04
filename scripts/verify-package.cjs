@@ -69,6 +69,9 @@ if (fs.existsSync(releaseManifestPath)) {
   );
   assert.equal(releaseManifest.visualGuid, sourceManifest.visual.guid);
   assert.equal(releaseManifest.visualVersion, sourceManifest.visual.version);
+  assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.path, "assets/partner-center-logo.png");
+  assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.width, 300);
+  assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.height, 300);
 }
 
 console.log(`Verified ${packageName} (${fs.statSync(packagePath).size} bytes)`);

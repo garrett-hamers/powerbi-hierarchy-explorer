@@ -31,6 +31,9 @@ Visual metadata is stable at GUID `atlynHierarchyExplorer` with
 `privileges: []`. The package uses no network access, external assets, unsafe
 HTML, dynamic code, or user photos. This repository does not claim Microsoft
 certification or substitute for validation in a real Power BI host.
+Partner Center publication assets include `assets/partner-center-logo.png`
+(300x300 PNG derived from the visual source icon and validated in release
+scripts).
 
 ## Development
 

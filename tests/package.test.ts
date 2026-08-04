@@ -55,6 +55,9 @@ describe("certification-first package contract", () => {
     expect(packageJson.scripts["clean-package"]).toBe("node scripts/clean-package-artifacts.cjs");
     expect(packageJson.scripts["normalize-package"]).toBe("node scripts/normalize-package.cjs");
     expect(packageJson.scripts["verify-package"]).toBe("node scripts/verify-package.cjs");
+    expect(packageJson.scripts["validate-publication-assets"]).toBe(
+      "node scripts/validate-publication-assets.cjs"
+    );
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
     expect(packageJson.scripts["verify-reproducible-package"]).toBe(
       "node scripts/verify-reproducible-package.cjs"
@@ -68,6 +71,7 @@ describe("certification-first package contract", () => {
     expect(pbiviz.author.email).not.toContain(".example");
     expect(pbiviz.visual.supportUrl).toMatch(/^https:\/\//);
     expect(pbiviz.visual.gitHubUrl).toBe(pbiviz.visual.supportUrl);
+    expect(fs.existsSync(path.join(root, "assets", "partner-center-logo.png"))).toBe(true);
   });
 
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {

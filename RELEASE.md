@@ -21,12 +21,13 @@ packages are intentionally not committed.
 
    `npm run package` removes prior package output, creates one fresh
    `dist/*.pbiviz`, normalizes ZIP entry order, timestamps, permissions,
-   platform, and compression, and verifies its generated manifest against the
-   source capabilities, dependencies, and stable metadata. It also writes
-   `dist/release-manifest.json` with the package filename, byte length,
-   uppercase SHA-256, source commit, visual GUID/version, and normalization
-   policy. The reproducibility gate runs two clean packages and requires
-   identical bytes and SHA-256.
+   platform, and compression, verifies publication assets, and verifies its
+   generated manifest against the source capabilities, dependencies, and stable
+   metadata. It also writes `dist/release-manifest.json` with the package
+   filename, byte length, uppercase SHA-256, source commit, visual GUID/version,
+   Partner Center logo metadata (`assets/partner-center-logo.png` hash/bytes/
+   dimensions), and normalization policy. The reproducibility gate runs two
+   clean packages and requires identical bytes and SHA-256.
 3. Record `dist/release-manifest.json` with the `.pbiviz` artifact when
    publishing to immutable Blob/AppSource storage. Rebuilds from identical
    source and locked dependencies must produce the same package hash.

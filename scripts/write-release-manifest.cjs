@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { readPngMetadata } = require("./read-png-metadata.cjs");
 
 const root = path.resolve(__dirname, "..");
 const packageFiles = fs.readdirSync(path.join(root, "dist")).filter((file) => file.endsWith(".pbiviz"));
@@ -26,6 +27,12 @@ const releaseManifest = {
   sourceCommit,
   visualGuid: sourceManifest.visual.guid,
   visualVersion: sourceManifest.visual.version,
+  publicationAssets: {
+    partnerCenterLogo: {
+      path: "assets/partner-center-logo.png",
+      ...readPngMetadata(path.join(root, "assets", "partner-center-logo.png"))
+    }
+  },
   hashPolicy:
     "SHA-256 of the normalized .pbiviz ZIP; entries are sorted and use fixed timestamps, DOS permissions, DOS platform, and DEFLATE level 9."
 };
