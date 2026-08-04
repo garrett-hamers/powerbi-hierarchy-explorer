@@ -150,15 +150,26 @@ this project agrees with a peer project generated the same way; it does not show
 that either one opens. Treat the first Desktop open as the verification step it
 is, and if it reports a blocking error, the file it names is the thing to fix.
 
+Known open question: **whether Desktop needs a Refresh pass to materialise the
+calculated table before Save As.** A sibling Atlyn sample built on a Power Query
+`#table` partition did need one - it opened reporting *"Some of the tables have
+incomplete or no data"* - and nobody has tested whether a `DATATABLE` calculated
+table behaves the same way. Step 3 of the procedure below is written to be
+correct either way.
+
 ### Why it is offline
 
 - The data is a **DAX calculated table** built with `DATATABLE`, not a Power
-  Query partition. A calculated table has **no data source at all**, so nothing
-  can prompt for credentials, there is no privacy-level or formula-firewall
-  surface, and the report carries no refresh dependency.
-  `tests/sample-report.test.ts` asserts the partition is `= calculated`, that no
-  Power Query construct survives, and that no connector or URL string appears
-  anywhere in the model.
+  Query partition. The model declares **no data source at all**, so there is
+  nothing for Desktop to authenticate against and no privacy-level or
+  formula-firewall surface. `tests/sample-report.test.ts` asserts the partition
+  is `= calculated`, that no Power Query construct survives, and that no
+  connector or URL string appears anywhere in the model.
+
+  That the model has no source is structural and enforced by the tests. Whether
+  Desktop still requires a **Refresh > Schema and data** pass to materialise the
+  table before saving is a separate question that has **not** been tested here;
+  step 3 of the procedure below covers it either way.
 - `DATATABLE` accepts literal constants only, so the root row's missing
   `ParentId` is written as an empty string rather than `BLANK()`. That is
   behaviourally identical here: `normalizeId` in `src/graph.ts` trims and
@@ -211,14 +222,22 @@ So the project is committed and the `.pbix` is produced once, by hand:
    reports using enhanced metadata format (PBIR)**. Restart Desktop. Both are
    still preview features.
 2. Open `samples/AtlynHierarchyExplorerSample.pbip`.
-3. Let the model load. There is no data source, so there must be no credential
-   prompt and no refresh step; the calculated table is evaluated by the engine.
-   If Desktop asks for credentials, something external crept into the model and
-   the sample is no longer valid.
-4. Confirm the visual renders the hierarchy on the **Hierarchy overview** page.
+3. **Confirm the visual renders with data.** If any table shows as empty, or
+   Desktop reports *"Some of the tables have incomplete or no data"*, run
+   **Home > Refresh > Schema and data** before going any further. Whether
+   Desktop materialises a `DATATABLE` calculated table on open or needs an
+   explicit refresh first has not been tested for this project - a sibling Atlyn
+   sample using a Power Query `#table` partition did need one, so check rather
+   than assume. Saving without checking can ship a `.pbix` whose tables are
+   empty.
+4. If Desktop ever prompts for **credentials**, stop and investigate: the model
+   declares no data source, so a prompt means something external has crept in
+   and the sample is no longer valid.
 5. **File > Save As** and choose `.pbix`. Keep it outside the repository - the
    `.pbix` is a build output and is deliberately not committed.
-6. Upload that `.pbix` to Partner Center as the sample report.
+6. Reopen the saved `.pbix` and confirm the hierarchy still renders with data
+   before uploading it.
+7. Upload that `.pbix` to Partner Center as the sample report.
 
 Desktop may normalise the project files when it saves. That is expected; rerun
 `npm run sample-report` to restore the canonical generated state. Opening the

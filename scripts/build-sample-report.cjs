@@ -95,10 +95,14 @@ const daxLiteral = (value) => {
 
 /**
  * Builds a DAX calculated table. This is deliberately not a Power Query
- * partition: a calculated table has no data source at all, so nothing can prompt
- * for credentials, there is no privacy-level or formula-firewall surface, and
- * the report has no refresh dependency. That is what "works fully offline with
- * no external connections" has to mean for a Partner Center sample.
+ * partition: a calculated table declares no data source at all, so there is
+ * nothing to authenticate against and no privacy-level or formula-firewall
+ * surface. That is what "works fully offline with no external connections" has
+ * to mean for a Partner Center sample.
+ *
+ * Whether Power BI Desktop materialises the table on open or still wants a
+ * Refresh pass before Save As is untested; docs/partner-center-submission.md
+ * tells the owner to check rather than assume.
  */
 const buildPartitionExpression = (data) => {
   // Every column pair is comma-terminated, including the last, because the

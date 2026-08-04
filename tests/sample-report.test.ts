@@ -116,10 +116,9 @@ describe("offline AppSource sample report", () => {
     const model = fs.readFileSync(path.join(modelDirectory, "definition", "model.tmdl"), "utf8");
     const data = readJson(samples, "hierarchy-data.json");
 
-    // A calculated table has no data source at all, so nothing can prompt for
-    // credentials and the report has no refresh dependency. A Power Query
-    // partition, even one over an inline #table, still goes through the mashup
-    // engine.
+    // A calculated table declares no data source at all, so there is nothing to
+    // authenticate against. A Power Query partition, even one over an inline
+    // #table, still goes through the mashup engine.
     expect(table).toContain("partition Hierarchy = calculated");
     expect(table).toContain("mode: import");
     expect(table).toContain("DATATABLE(");
