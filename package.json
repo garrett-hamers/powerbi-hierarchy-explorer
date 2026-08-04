@@ -10,9 +10,10 @@
   "scripts": {
     "build": "npm run package",
     "clean-package": "node scripts/clean-package-artifacts.cjs",
-    "package": "npm run clean-package && pbiviz package && npm run normalize-package && npm run verify-package && npm run release-manifest",
+    "package": "npm run clean-package && pbiviz package && npm run normalize-package && npm run verify-package && npm run validate-publication-assets && npm run release-manifest",
     "normalize-package": "node scripts/normalize-package.cjs",
     "verify-package": "node scripts/verify-package.cjs",
+    "validate-publication-assets": "node scripts/validate-publication-assets.cjs",
     "release-manifest": "node scripts/write-release-manifest.cjs",
     "verify-reproducible-package": "node scripts/verify-reproducible-package.cjs",
     "start": "pbiviz start",
@@ -20,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "eslint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint": "npm run eslint",
-    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts && npm run verify-package && npm run release-manifest && npm run verify-reproducible-package",
+    "certification-audit": "npm run typecheck && npm run eslint && npm test -- --runInBand tests/package.test.ts && npm run verify-package && npm run validate-publication-assets && npm run release-manifest && npm run verify-reproducible-package",
     "audit": "npm audit"
   },
   "dependencies": {
