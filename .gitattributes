@@ -30,3 +30,9 @@ samples/**/*.pbism text eol=lf
 *.svg text eol=lf
 *.less text eol=lf
 
+# Written by npm run screenshots and read back by the publication gate. Without
+# this pin a Windows checkout converts it to CRLF and the next capture rewrites
+# it as LF, so the file shows a whole-file diff that has nothing to do with the
+# screenshots it records.
+assets/screenshot-capture.json text eol=lf
+
