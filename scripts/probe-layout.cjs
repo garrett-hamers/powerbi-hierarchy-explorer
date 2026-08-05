@@ -174,11 +174,12 @@ const readPackagedBundle = async () => {
     );
   }
   /*
-   * The archive is the input, but the compiled bundle inside it is cross-checked
-   * against the staging drop the screenshots and the publication gate read. If
-   * those two ever disagree, the bytes the host runs are not the bytes anything
-   * else in this repository has looked at - which is the exact gap between
-   * compiled and packaged that made reading the archive a requirement.
+   * The archive is the input; the compiled bundle inside it is then checked
+   * against the staging drop that `npm run screenshots` and the publication
+   * gate read, through the same helper they use. That turns "read the archive
+   * to avoid the gap between compiled and packaged bytes" into "read the
+   * archive and prove there is no gap". If the two ever disagree, the bytes the
+   * host runs are not the bytes anything else in this repository has looked at.
    */
   const bundleSha256 = hashBundle(js, css);
   const staged = readVisualBundle();
