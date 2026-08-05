@@ -11,17 +11,20 @@
  *   - the visualization pane icon is a real 20x20 PNG, and is the file
  *     pbiviz.json actually packages
  *   - 1 to 5 screenshots exist, each a real PNG at exactly 1366x768 and at most
- *     1024 KB, and each still byte-identical to what the capture recorded
- *     asserting it
+ *     1024 KB, each still byte-identical to what the capture recorded asserting
+ *     it, and all captured from the compiled visual this source builds
  *   - the support and privacy policy URLs are https
  *   - an EULA file is present
  *
  * Everything is checked with the Node standard library only, so CI needs no
- * browser and no extra packages.
+ * browser and no extra packages. The screenshot checks read the compiled
+ * bundle from .tmp/drop, so this runs after `pbiviz package`, which is where
+ * both `npm run package` and `npm run certification-audit` already call it.
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const { readPngMetadata } = require("./read-png-metadata.cjs");
+const { readVisualBundle } = require("./read-visual-bundle.cjs");
 
 const root = path.resolve(__dirname, "..");
 
@@ -288,6 +291,43 @@ if (captureRecord) {
     fail(
       `${SCREENSHOTS.record} was captured from version ${captureRecord.capturedWith?.visualVersion} but pbiviz.json declares ${visual.version}; re-capture so the listing shows what ships`
     );
+  }
+
+  /*
+   * The version alone cannot answer "do these screenshots still show this
+   * build?". It is a declared string, changed by hand and often not at all:
+   * 1.0.1.0 has already shipped from this repository as more than one package.
+   * A screenshot captured against an earlier 1.0.1.0 and one captured against
+   * the current 1.0.1.0 are indistinguishable by version.
+   *
+   * The compiled bundle is the thing that actually draws the scenes, so its
+   * hash is the honest identity. This is the check that would have caught the
+   * defect that shipped in a sibling visual, where a layout regression left the
+   * committed screenshots showing a feature the build no longer rendered.
+   *
+   * Like the per-image hashes, this compares recorded bytes against bytes on
+   * disk. It is not a re-render: nothing here predicts what an image will look
+   * like, only whether the code behind it has moved.
+   */
+  const bundleSha256 = captureRecord.capturedWith?.bundleSha256;
+  if (typeof bundleSha256 !== "string" || bundleSha256.length !== 64) {
+    fail(
+      `${SCREENSHOTS.record} records no compiled visual hash, so nothing ties the screenshots to a build; re-run "npm run screenshots"`
+    );
+  } else {
+    let bundle = null;
+    try {
+      bundle = readVisualBundle();
+    } catch (error) {
+      fail(`the compiled visual could not be read to check the screenshots against it: ${error.message}`);
+    }
+    if (bundle && bundle.sha256 !== bundleSha256) {
+      fail(
+        `the screenshots predate the current visual: they were captured from compiled visual ${bundleSha256}, ` +
+          `but this source compiles to ${bundle.sha256}. Whatever changed may have changed what the visual draws, ` +
+          `and ${SCREENSHOTS.directory} is what Partner Center shows customers. Re-run "npm run screenshots".`
+      );
+    }
   }
 
   const committed = new Map(screenshots.map((screenshot) => [screenshot.path, screenshot]));

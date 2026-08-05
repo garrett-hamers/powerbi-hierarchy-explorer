@@ -50,11 +50,14 @@ packages are intentionally not committed.
    asserts what every scene must contain - counts, interaction state and
    measured geometry - and refuses to write a PNG whose scene did not render,
    deleting the committed image rather than leaving a stale one in place. It
-   also writes `assets/screenshot-capture.json`, recording those measurements
-   and the SHA-256 of each published image, which every later build re-checks
-   against the committed bytes; commit it with the images. CI runs the same
-   gate as `npm run verify-screenshots`, which writes nothing, so the scenes
-   are checked on every push even when no image is regenerated.
+   also writes `assets/screenshot-capture.json`, recording those measurements,
+   the SHA-256 of each published image and the SHA-256 of the compiled visual
+   they were drawn from, all of which every later build re-checks against the
+   committed bytes; commit it with the images. Because the record pins the
+   compiled visual, a change to the visual that is not followed by a re-capture
+   fails the build rather than shipping screenshots of the previous behaviour.
+   CI runs the same gate as `npm run verify-screenshots`, which writes nothing,
+   so the scenes are checked on every push even when no image is regenerated.
 5. Review `docs/partner-center-submission.md` before submitting. It holds every
    Partner Center field with its final value and the manual steps that remain.
    If the visual changed, regenerate the offline sample report so it demos the

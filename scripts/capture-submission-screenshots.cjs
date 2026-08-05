@@ -41,10 +41,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
+const { readVisualBundle } = require("./read-visual-bundle.cjs");
 
 const root = path.resolve(__dirname, "..");
 const harnessDirectory = path.join(__dirname, "screenshot-harness");
-const dropManifestPath = path.join(root, ".tmp", "drop", "pbiviz.json");
 const outputDirectory = path.join(root, "assets", "screenshots");
 const stagingDirectory = path.join(root, ".tmp", "screenshots");
 const captureRecordPath = path.join(root, "assets", "screenshot-capture.json");
@@ -58,25 +58,8 @@ const MAX_BYTES = 1024 * 1024;
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-const loadPackagedVisual = () => {
-  if (!fs.existsSync(dropManifestPath)) {
-    throw new Error(
-      `${path.relative(root, dropManifestPath)} is missing. Run "npm run package" first so the compiled visual is available.`
-    );
-  }
-  const manifest = readJson(dropManifestPath);
-  const js = manifest.content && manifest.content.js;
-  const css = manifest.content && manifest.content.css;
-  if (!js) {
-    throw new Error(`${path.relative(root, dropManifestPath)} contains no compiled script`);
-  }
-  if (!css) {
-    throw new Error(
-      `${path.relative(root, dropManifestPath)} contains no compiled stylesheet; the visual would render unstyled`
-    );
-  }
-  return { js, css, guid: manifest.visual.guid, version: manifest.visual.version };
-};
+const readRecord = () =>
+  fs.existsSync(captureRecordPath) ? readJson(captureRecordPath) : null;
 
 const loadPlaywright = () => {
   try {
@@ -177,22 +160,32 @@ const evidenceFor = (probe) => ({
  * They are deliberately NOT an expectation that a later render will reproduce
  * them, and nothing downstream may treat them that way: two captures of the
  * same commit on the same machine differ by a handful of pixels at a single
- * channel value, and the Linux runner produces PNGs some 45% larger from the
- * same source. Re-rendering and comparing images would fail constantly for
- * reasons that have nothing to do with correctness.
+ * channel value - one pair came back at identical byte length with a different
+ * hash - and the Linux runner produces PNGs some 45% larger from the same
+ * source. Re-rendering and comparing images would fail constantly for reasons
+ * that have nothing to do with correctness. The same holds for bundleSha256:
+ * it identifies the code the scenes were drawn from, and is compared against
+ * the bundle on disk, never used to predict image bytes.
  *
  * What a hash does prove is that the file in the repository is still the file
- * the assertions were applied to. A screenshot edited, reverted or swapped
- * after capture passes every other gate; it cannot pass this one.
+ * the assertions were applied to, and that the visual has not moved underneath
+ * it. A screenshot edited, reverted or swapped after capture passes every other
+ * gate; so does a screenshot left behind by a change to the visual. Neither can
+ * pass this one.
  */
-const writeCaptureRecord = (packaged, channel, results) => {
+const writeCaptureRecord = (bundle, channel, results) => {
   const record = {
     documentation:
       "Written by npm run screenshots. Each sha256 pins the committed bytes the assertions were applied to; " +
-      "it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison.",
+      "it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison. " +
+      "bundleSha256 is the compiled visual those bytes were drawn from, and is compared against the bundle on " +
+      "disk so a screenshot cannot outlive the build it shows.",
     capturedWith: {
-      visualGuid: packaged.guid,
-      visualVersion: packaged.version,
+      visualGuid: bundle.guid,
+      visualVersion: bundle.version,
+      // The version is far too coarse to stand alone: 1.0.1.0 has already
+      // shipped as more than one package in this repository.
+      bundleSha256: bundle.sha256,
       browser: channel,
       viewport: `${WIDTH}x${HEIGHT}`
     },
@@ -213,18 +206,57 @@ const writeCaptureRecord = (packaged, channel, results) => {
 };
 
 /**
- * --verify re-renders, so it can also tell whether the committed record still
- * describes what the current source draws. Only the measured content is
- * compared: bytes and hashes are excluded on purpose, because they are
- * expected to differ on any machine other than the one that captured.
+ * Whether the committed PNG for a scene can stand rather than being rewritten.
+ *
+ * Renders are not bit-stable, so re-running the capture against a build that
+ * has not changed would otherwise rewrite every image with a few pixels of
+ * noise. That churn is pure cost, and a gate that dirties the tree for no
+ * reason teaches people to route around it.
+ *
+ * The condition is deliberately the bundle hash and not the measured values.
+ * Equal measurements do not mean an equal picture: recolour every node and the
+ * counts, the geometry and the text are all untouched while the committed image
+ * stops showing the product. Retaining on unchanged measurements would reopen
+ * precisely the gap bundleSha256 exists to close. Keying retention to the
+ * bundle keeps one clean guarantee - every committed screenshot was rendered
+ * from the bundle the record names.
  */
-const findRecordDrift = (results) => {
+const canRetainCommitted = (previous, bundle, id, probe) => {
+  if (!previous || previous.capturedWith?.bundleSha256 !== bundle.sha256) {
+    return false;
+  }
+  const scene = (previous.scenes ?? []).find((entry) => entry.id === id);
+  const committed = path.join(outputDirectory, `${id}.png`);
+  if (!scene || !fs.existsSync(committed)) {
+    return false;
+  }
+  if (JSON.stringify(scene.asserted) !== JSON.stringify(evidenceFor(probe))) {
+    return false;
+  }
+  const bytes = fs.readFileSync(committed);
+  return crypto.createHash("sha256").update(bytes).digest("hex").toUpperCase() === scene.sha256;
+};
+
+/**
+ * --verify re-renders, so it can also tell whether the committed record still
+ * describes what the current source draws. Only the measured content and the
+ * bundle identity are compared: image bytes and their hashes are excluded on
+ * purpose, because they are expected to differ on any machine other than the
+ * one that captured.
+ */
+const findRecordDrift = (bundle, results) => {
   if (!fs.existsSync(captureRecordPath)) {
     return [`${path.relative(root, captureRecordPath)} is missing; run "npm run screenshots" to record the capture`];
   }
-  const record = JSON.parse(fs.readFileSync(captureRecordPath, "utf8"));
+  const record = readJson(captureRecordPath);
   const recorded = new Map((record.scenes ?? []).map((scene) => [scene.id, scene]));
   const drift = [];
+  if (record.capturedWith?.bundleSha256 !== bundle.sha256) {
+    drift.push(
+      `the committed screenshots were captured from compiled visual ${record.capturedWith?.bundleSha256}, ` +
+        `but this source compiles to ${bundle.sha256}`
+    );
+  }
   for (const { id, probe } of results) {
     const scene = recorded.get(id);
     if (!scene) {
@@ -260,7 +292,8 @@ const summarise = (probe) =>
   ].join(", ");
 
 const capture = async () => {
-  const packaged = loadPackagedVisual();
+  const bundle = readVisualBundle();
+  const previousRecord = readRecord();
   const strings = readJson(resourcesPath);
   const playwright = loadPlaywright();
   const { browser, channel } = await launchBrowser(playwright);
@@ -292,8 +325,8 @@ const capture = async () => {
     await page.evaluate((value) => {
       window.ATLYN_STRINGS = value;
     }, strings);
-    await page.addStyleTag({ content: packaged.css });
-    await page.addScriptTag({ content: packaged.js });
+    await page.addStyleTag({ content: bundle.css });
+    await page.addScriptTag({ content: bundle.js });
 
     const scenarios = await page.evaluate(() =>
       window.ATLYN_SCENARIOS.map(({ id, input }) => ({ id, input }))
@@ -354,20 +387,28 @@ const capture = async () => {
   // late cannot leave assets/screenshots holding a mixture of renders.
   if (!verifyOnly) {
     fs.mkdirSync(outputDirectory, { recursive: true });
-    for (const { id, staged } of results) {
-      fs.copyFileSync(staged, path.join(outputDirectory, `${id}.png`));
+    for (const result of results) {
+      result.retained = canRetainCommitted(previousRecord, bundle, result.id, result.probe);
+      if (!result.retained) {
+        fs.copyFileSync(result.staged, path.join(outputDirectory, `${result.id}.png`));
+      }
     }
-    writeCaptureRecord(packaged, channel, results);
+    writeCaptureRecord(bundle, channel, results);
   }
   fs.rmSync(stagingDirectory, { recursive: true, force: true });
 
-  const drift = verifyOnly ? findRecordDrift(results) : [];
+  const drift = verifyOnly ? findRecordDrift(bundle, results) : [];
 
   console.log(
-    `${verifyOnly ? "Verified" : "Rendered"} ${packaged.guid} ${packaged.version} with ${channel} at ${WIDTH}x${HEIGHT}`
+    `${verifyOnly ? "Verified" : "Rendered"} ${bundle.guid} ${bundle.version} with ${channel} at ${WIDTH}x${HEIGHT}`
   );
-  for (const { id, size, probe } of results) {
-    console.log(`  ${id}.png ${size} bytes - ${summarise(probe)}`);
+  console.log(`  compiled visual ${bundle.sha256}`);
+  for (const { id, size, probe, retained } of results) {
+    const published = verifyOnly ? size : fs.statSync(path.join(outputDirectory, `${id}.png`)).size;
+    console.log(
+      `  ${id}.png ${published} bytes - ${summarise(probe)}` +
+        (retained ? " (committed bytes kept: same bundle, same measurements)" : "")
+    );
     console.log(`    ${probe.status}`);
     console.log(`    ${probe.breadcrumb}`);
   }
@@ -376,7 +417,7 @@ const capture = async () => {
       [
         `The committed capture record no longer matches what the source renders:`,
         ...drift.map((entry) => `  - ${entry}`),
-        `  Re-run "npm run screenshots" so ${path.relative(root, captureRecordPath)} describes the current build.`
+        `  Re-run "npm run screenshots" so ${path.relative(root, captureRecordPath).replace(/\\/g, "/")} describes the current build.`
       ].join("\n")
     );
   }

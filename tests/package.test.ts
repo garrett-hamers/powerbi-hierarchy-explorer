@@ -299,11 +299,17 @@ describe("certification-first package contract", () => {
       expect(scene.asserted.visual.height).toBeGreaterThan(0);
     }
 
+    // The declared version cannot tie a screenshot to a build: 1.0.1.0 has
+    // already covered more than one package here, so two screenshots captured
+    // from different code carry the same version. The compiled bundle can.
+    expect(record.capturedWith.bundleSha256).toMatch(/^[0-9A-F]{64}$/);
+
     const audit = fs.readFileSync(
       path.join(root, "scripts", "validate-publication-assets.cjs"),
       "utf8"
     );
     expect(audit).toContain("has changed since it was captured");
+    expect(audit).toContain("the screenshots predate the current visual");
   });
 
   test("CI verifies the screenshot scenes without publishing images", () => {
