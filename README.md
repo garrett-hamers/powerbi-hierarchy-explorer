@@ -171,9 +171,9 @@ find - which regions scroll at which density, and that the visual contains no
 scroll container is reported rather than quietly dropped, because a dropped
 region silently stops carrying its own requirement.
 
-The probe reads the archive, then cross-checks the compiled bundle inside it
-against the staging drop that `npm run screenshots` and the publication gate
-read, using the same `scripts/read-visual-bundle.cjs` they use. If those ever
-disagree, the bytes the host runs are not the bytes anything else in this
-repository has looked at, and that gap between compiled and packaged is the
-reason the probe loads the archive rather than the source tree.
+The probe reads the archive, then checks the compiled bundle inside it against
+the staging drop that `npm run screenshots` and the publication gate read, using
+the same `scripts/read-visual-bundle.cjs` they use. That turns "read the archive
+to avoid the gap between compiled and packaged bytes" into "read the archive and
+prove there is no gap". If the two ever disagree, the bytes the host runs are not
+the bytes anything else in this repository has looked at.

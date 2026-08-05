@@ -174,11 +174,12 @@ const readPackagedBundle = async () => {
     );
   }
   /*
-   * The archive is the input, but the compiled bundle inside it is cross-checked
-   * against the staging drop the screenshots and the publication gate read. If
-   * those two ever disagree, the bytes the host runs are not the bytes anything
-   * else in this repository has looked at - which is the exact gap between
-   * compiled and packaged that made reading the archive a requirement.
+   * The archive is the input; the compiled bundle inside it is then checked
+   * against the staging drop that `npm run screenshots` and the publication
+   * gate read, through the same helper they use. That turns "read the archive
+   * to avoid the gap between compiled and packaged bytes" into "read the
+   * archive and prove there is no gap". If the two ever disagree, the bytes the
+   * host runs are not the bytes anything else in this repository has looked at.
    */
   const bundleSha256 = hashBundle(js, css);
   const staged = readVisualBundle();
@@ -383,6 +384,40 @@ const collectResults = async () => {
   } finally {
     await browser.close();
   }
+
+  /*
+   * Every tile, every state, every offset, or the run is not the run it claims
+   * to be.
+   *
+   * The arithmetic on its own is weak - it derives from the same arrays that
+   * drove the loop, so it catches a case that failed to produce results but not
+   * a state someone deleted. The list in expected-regions.json is what catches
+   * that, which is why both are here: one guards execution, the other guards
+   * scope.
+   */
+  const expected = TILES.length * STATES.length * SCROLL_OFFSETS.length;
+  if (results.length !== expected) {
+    throw new Error(
+      `expected ${TILES.length} tiles x ${STATES.length} states x ${SCROLL_OFFSETS.length} offsets = ` +
+        `${expected} cases, measured ${results.length}. A case that did not run cannot have passed.`
+    );
+  }
+  const declared = expectations.states || [];
+  const probed = STATES.map((state) => state.id);
+  const missing = declared.filter((id) => !probed.includes(id));
+  const undeclared = probed.filter((id) => !declared.includes(id));
+  if (missing.length > 0 || undeclared.length > 0) {
+    throw new Error(
+      [
+        "the probed states no longer match scripts/layout-probe/expected-regions.json.",
+        missing.length > 0 ? `  declared but not probed: ${missing.join(", ")}` : null,
+        undeclared.length > 0 ? `  probed but not declared: ${undeclared.join(", ")}` : null,
+        "  A state that disappears takes its findings with it and leaves a smaller run that still reports zero."
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+  }
   return { bundle, channel, results, nativeCheck };
 };
 
@@ -407,8 +442,24 @@ const main = async () => {
     ].join("\n")
   );
 
-  const failingCases = results.filter((result) => result.violations.length > 0);
-  const worstFill = results.reduce(
+  /*
+   * What was measured, named rather than counted. "Cases: 180" says how many
+   * ran; it does not say which, and answering "did state X run" by grepping the
+   * source is a search that can look in the wrong file and conclude the state
+   * was dropped. Every run now answers it from its own output.
+   */
+  process.stdout.write(
+    [
+      `Measured ${TILES.length} tiles x ${STATES.length} states x ${SCROLL_OFFSETS.length} scroll offsets ` +
+        `= ${results.length} cases`,
+      `  tiles:   ${TILES.map((tile) => tile.name).join(", ")}`,
+      `  states:  ${STATES.map((state) => state.id).join(", ")}`,
+      `  offsets: ${SCROLL_OFFSETS.join(", ")}`,
+      ""
+    ].join("\n")
+  );
+
+  const failingCases = results.filter((result) => result.violations.length > 0);  const worstFill = results.reduce(
     (worst, result) =>
       (result.measurement.textFit?.worstFill ?? 0) > worst.fill
         ? { fill: result.measurement.textFit.worstFill, path: result.measurement.textFit.worstFillPath }
