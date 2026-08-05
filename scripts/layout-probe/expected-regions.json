@@ -1,0 +1,34 @@
+{
+  "note": "What the layout probe expects to find. Anything in here that stops being true is reported as a failure rather than quietly dropped, because a region that silently stops being a scroll container silently stops carrying its own requirement.",
+  "densityNote": "Expectations are per density because the visual deliberately changes shape with the tile. At minimal density the diagnostics strip is reduced to a screen-reader-only region and is no longer a scroll container - that is a decision, recorded here, rather than a check that quietly evaporated.",
+  "byDensity": {
+    "comfortable": {
+      "scrollRegions": [
+        "div.atlyn-root > div.atlyn-canvas-wrap",
+        "div.atlyn-root > div.atlyn-diagnostics"
+      ],
+      "mustOverflow": ["div.atlyn-root > div.atlyn-canvas-wrap"]
+    },
+    "compact": {
+      "scrollRegions": [
+        "div.atlyn-root > div.atlyn-canvas-wrap",
+        "div.atlyn-root > div.atlyn-diagnostics"
+      ],
+      "mustOverflow": ["div.atlyn-root > div.atlyn-canvas-wrap"]
+    },
+    "minimal": {
+      "scrollRegions": ["div.atlyn-root > div.atlyn-canvas-wrap"],
+      "mustOverflow": ["div.atlyn-root > div.atlyn-canvas-wrap"]
+    }
+  },
+  "countsNote": "Zero sticky and zero fixed elements. This visual pins nothing, so the sticky rules currently have nothing to run on - which is exactly why the count is pinned here. The day a sticky header appears this file fails, and the sticky checks get wired up before the header ships.",
+  "counts": {
+    "sticky": 0,
+    "fixed": 0
+  },
+  "minimumSizes": {
+    "minimumNote": "A drawing canvas below this is a visual that renders nothing at all.",
+    "canvasWidth": 24,
+    "canvasHeight": 24
+  }
+}

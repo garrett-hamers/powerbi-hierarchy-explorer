@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Atlyn Hierarchy Explorer - layout probe harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      /*
+       * A Power BI tile: an exactly sized box with overflow hidden. Content
+       * outside it is not scrolled to, not scrollbarred and not announced - it
+       * is silently dropped, which is the entire point of the probe. The tile
+       * fills the browser viewport so that width-based media queries in the
+       * packaged stylesheet see the tile width, exactly as they do inside the
+       * per-visual iframe a real host creates.
+       */
+      #tile {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      #visual-host {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Offline harness for scripts/probe-layout.cjs. It never touches the
+      network. The driver injects content.css and content.js read straight out
+      of the packaged .pbiviz archive, so what is measured is the artifact the
+      host runs rather than the source tree it was built from.
+    -->
+    <div id="tile"><div id="visual-host"></div></div>
+    <script src="host.js"></script>
+    <script src="fixtures.js"></script>
+    <script src="probe.js"></script>
+  </body>
+</html>

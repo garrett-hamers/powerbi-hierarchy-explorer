@@ -17,6 +17,28 @@
   --atlyn-edge-width: 1.5;
 }
 
+/*
+ * The visually-hidden idiom: present to a screen reader, absent from layout.
+ */
+.atlyn-visually-hidden() {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: 0;
+  max-height: 1px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/*
+ * No min-height. The host tile is the authority on how much room there is, and
+ * it clips at its own edge with no scrollbar: a floor of 96px inside an 80px
+ * tile does not make the visual 96px tall, it makes 16px of it disappear.
+ */
 .atlyn-root {
   background: var(--atlyn-background);
   color: var(--atlyn-foreground);
@@ -26,7 +48,6 @@
   font-family: var(--atlyn-font-family);
   font-size: 13px;
   height: 100%;
-  min-height: 96px;
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -129,6 +150,12 @@
   white-space: nowrap;
 }
 
+/*
+ * The canvas keeps no floor of its own on purpose: it is the item that shrinks,
+ * and a floor here would only move the overflow onto the strips above it. What
+ * keeps it alive is that density drops chrome the tile cannot afford, and the
+ * probe's collapsed-region rule fails the build if that ever stops being true.
+ */
 .atlyn-canvas-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -176,31 +203,32 @@
 }
 
 .atlyn-semantic-tree {
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  margin: -1px;
-  max-height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
+  .atlyn-visually-hidden();
 }
 
 /*
- * When the tree takes focus it rejoins the flow as a fixed-size pane. Without
- * flex: 0 0 auto the canvas keeps its full content height, pushes the tree past
- * the clipped bottom edge of .atlyn-root, and a keyboard user is left focused on
- * an item they cannot see.
+ * When the tree takes focus it rejoins the flow as a pane. It shrinks rather
+ * than holding its height, because it is a scroll container: shrinking it costs
+ * nothing a user cannot scroll back, while refusing to shrink pushes the canvas
+ * and the toolbar past the clipped edge of .atlyn-root, where nothing can bring
+ * them back - .atlyn-root has overflow: hidden, so the browser's own
+ * scroll-into-view is the only thing that can move it and the user cannot undo
+ * that scroll.
  */
 .atlyn-semantic-tree:focus-within {
   border-top: 1px solid var(--atlyn-border);
   clip: auto;
   clip-path: none;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   height: auto;
   margin: 0;
   max-height: 38%;
+  /*
+   * One whole row, even when 38% of the tile is less than that. A pane shorter
+   * than the row it is showing leaves the keyboard user focused on something
+   * the tile has cut in half, which is the defect this pane exists to avoid.
+   */
+  min-height: 42px;
   overflow: auto;
   padding: 4px 8px;
   position: relative;
@@ -251,6 +279,54 @@
   touch-action: manipulation;
 }
 
+/*
+ * Density. src/visual.ts publishes the tile the host reported as
+ * data-density, and each step below drops the chrome that no longer fits
+ * rather than letting the flex column push it - and everything after it - past
+ * the clipped edge of the tile.
+ *
+ * Strips that carry information a screen reader needs are hidden the
+ * accessible way rather than removed: the status strip is a live region, and
+ * silencing it would trade a layout defect for an accessibility one.
+ */
+.atlyn-root[data-density="compact"] .atlyn-breadcrumb,
+.atlyn-root[data-density="compact"] .atlyn-toolbar label,
+.atlyn-root[data-density="compact"] .atlyn-button,
+.atlyn-root[data-density="minimal"] .atlyn-breadcrumb,
+.atlyn-root[data-density="minimal"] .atlyn-toolbar label,
+.atlyn-root[data-density="minimal"] .atlyn-button {
+  display: none;
+}
+
+.atlyn-root[data-density="compact"] .atlyn-search,
+.atlyn-root[data-density="minimal"] .atlyn-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.atlyn-root[data-density="minimal"] .atlyn-status,
+.atlyn-root[data-density="minimal"] .atlyn-diagnostics {
+  .atlyn-visually-hidden();
+  border: 0;
+  flex: 0 0 auto;
+}
+
+/*
+ * At minimal density the search box is the only control left, so it stops
+ * insisting on a width the tile may not have.
+ */
+.atlyn-root[data-density="minimal"] .atlyn-toolbar {
+  min-height: 0;
+}
+
+/*
+ * An 80x80 tile cannot show a toolbar and a tree pane at once. While the tree
+ * holds focus the tree wins, because that is what the user is reading.
+ */
+.atlyn-root[data-density="minimal"][data-tree-focused="true"] .atlyn-toolbar {
+  display: none;
+}
+
 .atlyn-empty {
   color: var(--atlyn-muted);
   padding: 20px 8px;
@@ -294,20 +370,21 @@
   }
 }
 
+/*
+ * Scoped to comfortable density. Below that the toolbar has already lost its
+ * label, and giving the search a full row of its own would spend height the
+ * tile does not have.
+ */
 @media (max-width: 480px) {
-  .atlyn-toolbar {
+  .atlyn-root[data-density="comfortable"] .atlyn-toolbar {
     align-items: stretch;
   }
 
-  .atlyn-toolbar label {
+  .atlyn-root[data-density="comfortable"] .atlyn-toolbar label {
     flex-basis: 100%;
   }
 
-  .atlyn-search {
+  .atlyn-root[data-density="comfortable"] .atlyn-search {
     flex-basis: 100%;
-  }
-
-  .atlyn-semantic-tree {
-    max-height: 48%;
   }
 }
