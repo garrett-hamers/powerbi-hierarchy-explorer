@@ -47,18 +47,32 @@ const PALETTE = {
 };
 
 /*
- * The two marks share a motif but not a coordinate system, because a 20x20 icon
- * is not a 300x300 logo scaled by 1/15. Scaling down proportionally would give
- * the icon 0.5px connectors and 2.8px nodes, which resolve to faint grey smears
- * rather than shapes. Small canvases need relatively bolder strokes and fewer
- * elements, so the icon carries the top two levels of the same tree - a root and
- * its two children - at weights tuned for 20 pixels: a proportionally thicker
- * connector, wider margins, and enough blue between the bus and the child nodes
- * that they stay legible as separate shapes rather than merging into a blob.
+ * The two marks share a motif but not a coordinate system, and deliberately not a
+ * rendering approach either.
  *
- * `levels` runs root first. `links` joins each level to the one below it with an
- * elbow: a drop from the parent, a bus across its children, and a drop into each
- * child. Children are split evenly between the parents above them.
+ * The logo is 300x300 with rounded tiles and round-capped connectors, so its
+ * curves genuinely need antialiasing; supersampling is what stops them
+ * stair-stepping on the AppSource offer card.
+ *
+ * The icon is 20x20 and is drawn as whole-pixel, axis-aligned rectangles with
+ * square corners. There is not one curve or diagonal in it, so there is nothing
+ * for antialiasing to smooth: applied here it could only soften edges that would
+ * otherwise be pixel-exact, which at 20 pixels is a straight loss. Every
+ * coordinate below is an integer, so each output pixel is either fully inside a
+ * shape or fully outside it and the mark resolves to exactly two colours as a
+ * property of the geometry - not as a post-processing step.
+ *
+ * That is why the icon is not the logo scaled by 1/15. Proportional scaling would
+ * give it 0.5px connectors and 2.8px nodes, which resolve to faint grey smears
+ * rather than shapes, so it carries the top two levels of the same tree - a root
+ * and its two children - at weights tuned for 20 pixels, with enough blue between
+ * the bus and the child nodes that they read as separate shapes.
+ *
+ * `levels` runs root first. `links` joins each level to the one below it with a
+ * round-capped elbow: a drop from the parent, a bus across its children, and a
+ * drop into each child. Children are split evenly between the parents above them.
+ * `bars` is the rectilinear equivalent, listed explicitly so the pixel alignment
+ * is visible in the source rather than derived.
  */
 const ASSETS = [
   {
@@ -84,22 +98,30 @@ const ASSETS = [
     ]
   },
   {
+    // Mirror-symmetric about x = 10, with a 3px margin on every side.
     name: "icon",
     relativePath: "assets/icon.png",
     size: 20,
-    tileRadius: 3.2,
+    tileRadius: 0,
     levels: [
-      { centers: [10], centerY: 4.5, width: 11, height: 4.2, radius: 1.4, color: PALETTE.node },
-      { centers: [5.2, 14.8], centerY: 14.7, width: 7.2, height: 4.6, radius: 1.4, color: PALETTE.node }
+      { centers: [10], centerY: 5.5, width: 12, height: 5, radius: 0, color: PALETTE.node },
+      { centers: [6, 14], centerY: 15.5, width: 6, height: 3, radius: 0, color: PALETTE.node }
     ],
-    links: [{ parent: 0, busY: 9.4, stroke: 1.4, color: PALETTE.node }]
+    bars: [
+      { x: 9, y: 8, width: 2, height: 2, color: PALETTE.node }, // drop from the root
+      { x: 5, y: 10, width: 10, height: 2, color: PALETTE.node }, // bus across the children
+      { x: 5, y: 12, width: 2, height: 2, color: PALETTE.node }, // drop into the left child
+      { x: 13, y: 12, width: 2, height: 2, color: PALETTE.node } // drop into the right child
+    ]
   }
 ];
 
-// Floors the render must clear before it is written, so a change to the geometry
-// that flattened a mark could not quietly ship. They match the publication gate
-// in validate-publication-assets.cjs.
-const MIN_COLORS = { 300: 16, 20: 8 };
+// The floor the render must clear before it is written, so a change to the
+// geometry that flattened the logo could not quietly ship. It matches the
+// publication gate in validate-publication-assets.cjs, and like that gate it is
+// keyed by canvas size and applies to the 300x300 logo only - see the comment
+// there for why a 20x20 rectilinear mark is not a candidate for a colour floor.
+const MIN_COLORS = { 300: 16 };
 
 const fail = (message) => {
   process.stderr.write(`Brand asset generation failed: ${message}\n`);
@@ -249,7 +271,10 @@ const renderMark = (asset) => {
   surface.roundedRect(0, 0, asset.size, asset.size, asset.tileRadius, PALETTE.brand);
 
   // Connectors first so the nodes sit on top of the joins.
-  for (const link of asset.links) {
+  for (const bar of asset.bars ?? []) {
+    surface.roundedRect(bar.x, bar.y, bar.width, bar.height, 0, bar.color);
+  }
+  for (const link of asset.links ?? []) {
     const parent = asset.levels[link.parent];
     const child = asset.levels[link.parent + 1];
     const perParent = child.centers.length / parent.centers.length;
@@ -405,7 +430,7 @@ if (require.main === module) {
       );
     }
     const floor = MIN_COLORS[asset.size];
-    if (metadata.distinctColors < floor) {
+    if (floor !== undefined && metadata.distinctColors < floor) {
       fail(
         `${asset.relativePath} rendered only ${metadata.distinctColors} distinct colours, below the ${floor} required of an antialiased mark`
       );
