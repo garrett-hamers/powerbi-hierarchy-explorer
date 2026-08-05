@@ -57,6 +57,28 @@ const screenshots = fs
     }
     return { path: relativePath, ...metadata, capture: { id: scene.id, asserted: scene.asserted } };
   });
+/*
+ * sourceCommit is the commit that BUILT this artifact, not the commit whose
+ * bytes these are. On a docs-only commit the two differ: the bytes are
+ * unchanged and first appeared at some earlier commit, while GITHUB_SHA moves
+ * with every merge.
+ *
+ * Three answers to "which commit" are all defensible, and different records
+ * pick different ones:
+ *
+ *   this file            the commit that built it            (GITHUB_SHA)
+ *   a storefront ledger  the commit whose run produced the uploaded bytes
+ *   first appearance     the commit where the bytes came into being
+ *
+ * None is wrong; they answer different questions. The hazard is that a
+ * storefront's own manifest may carry the same field names - sourceCommit,
+ * sha256 - under the second convention, and its filename may differ from this
+ * one by a single word. Reconciling the two as though they meant the same thing
+ * reports a provenance failure on a correct artifact, every time a commit lands
+ * that does not change the package. Two records that must stay distinct need
+ * something that notices when they are compared as if they were not; this
+ * comment is that something, until a checker exists.
+ */
 let sourceCommit = process.env.GITHUB_SHA;
 if (!sourceCommit) {
   sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -67,6 +89,10 @@ const releaseManifest = {
   bytes: packageBytes.length,
   sha256: crypto.createHash("sha256").update(packageBytes).digest("hex").toUpperCase(),
   sourceCommit,
+  // Says which question sourceCommit answers, in the record itself rather than
+  // only in the script that writes it. Anything reconciling this file against a
+  // storefront manifest reads the JSON, not the comment above.
+  sourceCommitMeaning: "the commit that built this artifact (GITHUB_SHA); not the commit whose bytes these are, which differs on any commit that does not change the package",
   visualGuid: sourceManifest.visual.guid,
   visualVersion: sourceManifest.visual.version,
   supportUrl: sourceManifest.visual.supportUrl,
