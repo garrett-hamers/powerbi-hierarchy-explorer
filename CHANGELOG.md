@@ -17,6 +17,18 @@ is bumped to keep the version-to-bytes mapping honest.
 - Add a deterministic Partner Center publication logo asset contract
   (`assets/partner-center-logo.png`), include its metadata in release manifests,
   and run CI on lowercase `certification` snapshots.
+- Render the Partner Center listing logo properly. It had been the 20x20
+  `assets/icon.png` scaled up, so it held exactly two colours with no
+  intermediate tones and every curve stair-stepped at 300x300, against
+  Microsoft's guidance that store images must not be poorly rendered. It is now
+  drawn by `npm run logo` (`scripts/build-partner-center-logo.cjs`) as an
+  antialiased parent/child tree on the `#2764C4` brand tile, using the Node
+  standard library only. `npm run validate-publication-assets` now also requires
+  at least 24 distinct colours in the logo, so a flat placeholder can no longer
+  pass, and `tests/package.test.ts` re-renders the mark and compares pixels so
+  the committed file cannot drift from its generator. The 20x20 icon is
+  unchanged and the packaged `.pbiviz` bytes are unaffected: the package embeds
+  the icon, not the listing logo.
 - Ship the compiled stylesheet inside the package. `src/visual.ts` never imported
   `style/visual.less`, so powerbi-visuals-tools bundled an empty `content.css`
   and the visual rendered completely unstyled in the host.

@@ -37,8 +37,15 @@ certification or substitute for validation in a real Power BI host.
 AppSource / Partner Center submission material lives alongside the source and is
 validated on every build by `npm run validate-publication-assets`:
 
-- `assets/partner-center-logo.png` - 300x300 PNG derived from the visual source
-  icon.
+- `assets/partner-center-logo.png` - 300x300 PNG of the parent/child tree the
+  visual draws, on the same `#2764C4` tile as `assets/icon.png`. It is rendered
+  by `npm run logo` from the geometry in
+  `scripts/build-partner-center-logo.cjs`, which supersamples every shape 8x8 so
+  the rounded corners and connector caps are genuinely antialiased rather than
+  stair-stepped. The renderer is Node standard library only - no browser and no
+  image package - so it produces identical bytes on every machine, and
+  `tests/package.test.ts` re-renders it and compares pixels so the committed
+  file cannot drift from the script.
 - `assets/screenshots/*.png` - three 1366x768 PNGs, each under 1024 KB. They are
   real renders of the packaged bundle driven by native browser input, not
   mock-ups; see `scripts/screenshot-harness/`.

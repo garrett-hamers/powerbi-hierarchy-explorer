@@ -68,7 +68,7 @@ download paths keyed on the GUID stay valid; only the version segment moves.
 
 | Requirement | Value | Status |
 | --- | --- | --- |
-| Logo, PNG, exactly 300x300 | `assets/partner-center-logo.png` | Present. 300x300, 8-bit RGBA, 2294 bytes. |
+| Logo, PNG, exactly 300x300 | `assets/partner-center-logo.png` | Present. 300x300, 8-bit RGBA, 4089 bytes, 57 distinct colours. Rendered by `npm run logo`. |
 | Screenshots, 1-5, PNG, exactly 1366x768, each <= 1024 KB | `assets/screenshots/01-hierarchy-overview.png`<br>`assets/screenshots/02-expand-collapse.png`<br>`assets/screenshots/03-search-diagnostics.png` | Present. All 1366x768, all well under 1024 KB. |
 | Support URL, https | `https://atlyn.io/contact` | Live. |
 | Privacy policy URL, https | `https://atlyn.io/legal/privacy` | Live. |
@@ -274,12 +274,25 @@ npm audit
 
 `npm run validate-publication-assets` (invoked by both `npm run package` and
 `npm run certification-audit`) is the gate for this document. It fails the build
-if the logo is not exactly 300x300, if there are not between 1 and 5 screenshots
-at exactly 1366x768 and at most 1024 KB, if any image is a flat placeholder, if a
-required `pbiviz.json` field is missing, if the version is not four-part, if the
-support or privacy URL is not `https://`, if the author email is a placeholder or
-`noreply` address, or if `EULA.md` or this dossier is missing. It needs only Node,
-so CI runs it without a browser.
+if the logo is not exactly 300x300 or carries fewer than 24 distinct colours, if
+there are not between 1 and 5 screenshots at exactly 1366x768 and at most
+1024 KB, if any image is a flat placeholder, if a required `pbiviz.json` field is
+missing, if the version is not four-part, if the support or privacy URL is not
+`https://`, if the author email is a placeholder or `noreply` address, or if
+`EULA.md` or this dossier is missing. It needs only Node, so CI runs it without a
+browser.
+
+The 24 colour floor on the logo is what stops a hard-edged mark reaching the
+offer card. Microsoft's image guidance asks for artwork that is not "poorly
+rendered", and a two-tone image has no intermediate tones for a curve or a
+diagonal to land on, so it stair-steps at 300x300. The committed logo carries 57
+distinct colours, all of them produced by supersampled edge coverage.
+
+The logo is rendered, not hand-drawn, and needs only Node:
+
+```text
+npm run logo
+```
 
 Regenerating the screenshots additionally needs a browser, which is intentionally
 not a dependency of this package:

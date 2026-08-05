@@ -139,7 +139,11 @@ const countDistinctColors = (pixels, channels, limit = 4096) => {
   return seen.size;
 };
 
-const readPngMetadata = (filePath) => {
+/**
+ * Reads and fully decodes a PNG once. Both public helpers build on this so the
+ * structural checks and the pixel comparison can never disagree about a file.
+ */
+const readPngImage = (filePath) => {
   const bytes = fs.readFileSync(filePath);
   if (bytes.length < 33) {
     throw new Error(`${filePath}: PNG file is truncated`);
@@ -162,7 +166,15 @@ const readPngMetadata = (filePath) => {
     interlace: bytes.readUInt8(28)
   };
   const { pixels, channels } = decodePixels(bytes, imageData, header, filePath);
+  return { bytes, header, types, pixels, channels };
+};
 
+/**
+ * The summary the publication gate and the release manifest record. It stays
+ * JSON-sized on purpose: the decoded samples are reached through readPngPixels.
+ */
+const readPngMetadata = (filePath) => {
+  const { bytes, header, types, pixels, channels } = readPngImage(filePath);
   return {
     bytes: bytes.length,
     ...header,
@@ -172,4 +184,13 @@ const readPngMetadata = (filePath) => {
   };
 };
 
-module.exports = { readPngMetadata };
+/**
+ * The decoded samples on their own, for callers that need to compare an image
+ * against freshly rendered pixels rather than against compressed file bytes.
+ */
+const readPngPixels = (filePath) => {
+  const { header, pixels, channels } = readPngImage(filePath);
+  return { width: header.width, height: header.height, channels, pixels };
+};
+
+module.exports = { readPngMetadata, readPngPixels };
