@@ -76,6 +76,9 @@ if (fs.existsSync(releaseManifestPath)) {
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.path, "assets/partner-center-logo.png");
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.width, 300);
   assert.equal(releaseManifest.publicationAssets.partnerCenterLogo.height, 300);
+  assert.equal(releaseManifest.publicationAssets.icon.path, sourceManifest.assets.icon);
+  assert.equal(releaseManifest.publicationAssets.icon.width, 20);
+  assert.equal(releaseManifest.publicationAssets.icon.height, 20);
   assert.equal(releaseManifest.publicationAssets.eula, "EULA.md");
   assert.equal(
     releaseManifest.publicationAssets.submissionDossier,

@@ -59,7 +59,7 @@ describe("certification-first package contract", () => {
       "node scripts/validate-publication-assets.cjs"
     );
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-submission-screenshots.cjs");
-    expect(packageJson.scripts.logo).toBe("node scripts/build-partner-center-logo.cjs");
+    expect(packageJson.scripts["brand-assets"]).toBe("node scripts/build-brand-assets.cjs");
     expect(packageJson.scripts["sample-report"]).toBe("node scripts/build-sample-report.cjs");
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
     expect(packageJson.scripts["verify-reproducible-package"]).toBe(
@@ -128,33 +128,51 @@ describe("certification-first package contract", () => {
     }
   });
 
-  test("ships a Partner Center logo that is reproducible from its generator and genuinely antialiased", () => {
+  test("ships brand marks that are reproducible from their generator and genuinely antialiased", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readPngMetadata, readPngPixels } = require("../scripts/read-png-metadata.cjs");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { renderLogo, SIZE } = require("../scripts/build-partner-center-logo.cjs");
+    const { ASSETS, renderMark, MIN_COLORS } = require("../scripts/build-brand-assets.cjs");
 
-    const logoPath = path.join(root, "assets", "partner-center-logo.png");
-    const metadata = readPngMetadata(logoPath);
-    expect(SIZE).toBe(300);
-    expect(metadata.width).toBe(SIZE);
-    expect(metadata.height).toBe(SIZE);
+    // Per asset class, not one shared number: a 20x20 icon has 400 pixels and
+    // only its curves can carry intermediate tones, so healthy icons sit far
+    // below healthy 300x300 logos. One floor would either reject a good icon or
+    // pass a degenerate logo.
+    expect(MIN_COLORS).toEqual({ 300: 16, 20: 8 });
+    expect(ASSETS.map((asset: { relativePath: string }) => asset.relativePath)).toEqual([
+      "assets/partner-center-logo.png",
+      "assets/icon.png"
+    ]);
 
-    // The previous logo was the 20x20 icon upscaled, so it held exactly two
-    // colours and every curve stair-stepped. A real antialiased mark carries
-    // dozens of intermediate tones; 24 is the floor the publication gate in
-    // scripts/validate-publication-assets.cjs enforces.
-    expect(metadata.distinctColors).toBeGreaterThanOrEqual(24);
+    for (const asset of ASSETS) {
+      const file = path.join(root, ...asset.relativePath.split("/"));
+      const metadata = readPngMetadata(file);
+      expect(metadata.width).toBe(asset.size);
+      expect(metadata.height).toBe(asset.size);
 
-    // Re-rendering from the committed geometry must reproduce the committed
-    // pixels, so the asset can never drift away from the script that made it.
-    // Pixels rather than file bytes, because zlib output is allowed to differ
-    // between Node versions while the image it encodes may not.
-    const committed = readPngPixels(logoPath);
-    expect(committed.channels).toBe(4);
-    const rendered = renderLogo();
-    expect(rendered.rgba).toHaveLength(SIZE * SIZE * 4);
-    expect(Buffer.from(rendered.rgba).equals(committed.pixels)).toBe(true);
+      // Both marks were previously two flat colours with no intermediate tones,
+      // so every curve stair-stepped. These are the floors the publication gate
+      // in scripts/validate-publication-assets.cjs enforces.
+      expect(metadata.distinctColors).toBeGreaterThanOrEqual(MIN_COLORS[asset.size]);
+
+      // Re-rendering from the committed geometry must reproduce the committed
+      // pixels, so neither asset can drift away from the script that made it.
+      // Pixels rather than file bytes, because zlib output is allowed to differ
+      // between Node versions while the image it encodes may not.
+      const committed = readPngPixels(file);
+      expect(committed.channels).toBe(4);
+      const rendered = renderMark(asset);
+      expect(rendered.rgba).toHaveLength(asset.size * asset.size * 4);
+      expect(Buffer.from(rendered.rgba).equals(committed.pixels)).toBe(true);
+    }
+  });
+
+  test("packages the icon this repository generates and gates", () => {
+    const pbiviz = JSON.parse(fs.readFileSync(path.join(root, "pbiviz.json"), "utf8"));
+    // pbiviz embeds this file into the .pbiviz as content.iconBase64, so if the
+    // manifest pointed elsewhere the packaged icon would never be validated.
+    expect(pbiviz.assets.icon).toBe("assets/icon.png");
+    expect(fs.existsSync(path.join(root, "assets", "icon.png"))).toBe(true);
   });
 
   test("ships the compiled stylesheet inside the package", () => {

@@ -48,6 +48,12 @@ const releaseManifest = {
       path: "assets/partner-center-logo.png",
       ...readPngMetadata(path.join(root, "assets", "partner-center-logo.png"))
     },
+    // The one brand mark that ships inside the package, embedded as
+    // content.iconBase64, so its hash is part of the packaged bytes.
+    icon: {
+      path: "assets/icon.png",
+      ...readPngMetadata(path.join(root, "assets", "icon.png"))
+    },
     // Screenshot bytes are not reproducible across machines because font
     // rasterisation differs, so these hashes record provenance only; the
     // enforced contract is dimensions, byte ceiling and PNG structure.

@@ -64,11 +64,20 @@ the same version number. Publish the new artifact to the `1.0.1.0` Blob path and
 update the storefront release manifest to point at it. The GUID is unchanged, so
 download paths keyed on the GUID stay valid; only the version segment moves.
 
+Regenerating `assets/icon.png` moved `1.0.1.0`'s bytes again, because pbiviz
+embeds the icon into the package as `content.iconBase64`. That does not break the
+version-to-bytes rule: `1.0.1.0` has not been published, so no consumer has ever
+seen a different artifact under this version. Take the hash from
+`dist/release-manifest.json` at submission time rather than from any earlier
+build note. The 300x300 listing logo is *not* in the package, so changing it
+alone never moves the hash.
+
 ## 2. Listing assets
 
 | Requirement | Value | Status |
 | --- | --- | --- |
-| Logo, PNG, exactly 300x300 | `assets/partner-center-logo.png` | Present. 300x300, 8-bit RGBA, 4089 bytes, 57 distinct colours. Rendered by `npm run logo`. |
+| Logo, PNG, exactly 300x300 | `assets/partner-center-logo.png` | Present. 300x300, 8-bit RGBA, 4089 bytes, 57 distinct colours. Rendered by `npm run brand-assets`. |
+| Visualization pane icon, PNG, exactly 20x20 | `assets/icon.png` | Present. 20x20, 8-bit RGBA, 496 bytes, 27 distinct colours. Same mark and same `#2764C4` as the logo, rendered by `npm run brand-assets`. Embedded in the package as `content.iconBase64`. |
 | Screenshots, 1-5, PNG, exactly 1366x768, each <= 1024 KB | `assets/screenshots/01-hierarchy-overview.png`<br>`assets/screenshots/02-expand-collapse.png`<br>`assets/screenshots/03-search-diagnostics.png` | Present. All 1366x768, all well under 1024 KB. |
 | Support URL, https | `https://atlyn.io/contact` | Live. |
 | Privacy policy URL, https | `https://atlyn.io/legal/privacy` | Live. |
@@ -274,24 +283,41 @@ npm audit
 
 `npm run validate-publication-assets` (invoked by both `npm run package` and
 `npm run certification-audit`) is the gate for this document. It fails the build
-if the logo is not exactly 300x300 or carries fewer than 24 distinct colours, if
-there are not between 1 and 5 screenshots at exactly 1366x768 and at most
-1024 KB, if any image is a flat placeholder, if a required `pbiviz.json` field is
-missing, if the version is not four-part, if the support or privacy URL is not
-`https://`, if the author email is a placeholder or `noreply` address, or if
-`EULA.md` or this dossier is missing. It needs only Node, so CI runs it without a
-browser.
+if the logo is not exactly 300x300 or carries fewer than 16 distinct colours, if
+the icon is not exactly 20x20 or carries fewer than 8, if `pbiviz.json` packages
+an icon other than the one just checked, if there are not between 1 and 5
+screenshots at exactly 1366x768 and at most 1024 KB, if any image is a flat
+placeholder, if a required `pbiviz.json` field is missing, if the version is not
+four-part, if the support or privacy URL is not `https://`, if the author email
+is a placeholder or `noreply` address, or if `EULA.md` or this dossier is
+missing. It needs only Node, so CI runs it without a browser.
 
-The 24 colour floor on the logo is what stops a hard-edged mark reaching the
-offer card. Microsoft's image guidance asks for artwork that is not "poorly
-rendered", and a two-tone image has no intermediate tones for a curve or a
-diagonal to land on, so it stair-steps at 300x300. The committed logo carries 57
-distinct colours, all of them produced by supersampled edge coverage.
+The colour floors are what stop a hard-edged mark reaching the offer card or the
+visualization pane. Microsoft's image guidance asks for artwork that is not
+"poorly rendered", and a two-tone image has no intermediate tones for a curve to
+land on, so it stair-steps.
 
-The logo is rendered, not hand-drawn, and needs only Node:
+They are deliberately **per asset class**, because one number does not transfer
+between canvas sizes. A 20x20 icon has 400 pixels and only its curves can carry
+intermediate tones, so healthy icons across this portfolio land between 10 and
+118 colours while healthy 300x300 logos land between 20 and 194. A floor
+calibrated on logos would reject a perfectly good icon; one calibrated on icons
+would wave a degenerate logo through. A *ratio* does not transfer either, since
+it scales inversely with canvas area - the same two-colour defect is 0.002% of a
+logo but 0.5% of an icon.
+
+| Asset | Floor | Committed | Headroom |
+| --- | --- | --- | --- |
+| `assets/partner-center-logo.png` (300x300) | 16 | 57 | 3.6x |
+| `assets/icon.png` (20x20) | 8 | 27 | 3.4x |
+
+Each floor sits below the healthiest-known minimum for its class, so a legitimate
+simpler redesign is not tripped, while a two-tone asset still fails by 4x to 8x.
+
+Both marks are rendered, not hand-drawn, and need only Node:
 
 ```text
-npm run logo
+npm run brand-assets
 ```
 
 Regenerating the screenshots additionally needs a browser, which is intentionally
