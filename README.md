@@ -40,13 +40,15 @@ validated on every build by `npm run validate-publication-assets`:
 - `assets/partner-center-logo.png` and `assets/icon.png` - the 300x300 listing
   logo and the 20x20 visualization pane icon. Both are the same parent/child tree
   the visual draws, on the same `#2764C4` tile, rendered by `npm run brand-assets`
-  from the geometry in `scripts/build-brand-assets.cjs`. Every shape is
-  supersampled 8x8, so rounded corners and connector caps are genuinely
-  antialiased rather than stair-stepped. The renderer is Node standard library
-  only - no browser and no image package - so it produces identical bytes on
-  every machine, and `tests/package.test.ts` re-renders both and compares pixels
-  so the committed files cannot drift from the script. The icon is embedded in
-  the packaged `.pbiviz` as `content.iconBase64`; the listing logo is not.
+  from the geometry in `scripts/build-brand-assets.cjs`. They are rendered
+  differently on purpose: the logo has rounded tiles and round-capped connectors,
+  so it is supersampled 8x8 and its curves are genuinely antialiased, while the
+  icon is whole-pixel axis-aligned rectangles with nothing to antialias and stays
+  pixel-exact at 20px. The renderer is Node standard library only - no browser and
+  no image package - so it produces identical bytes on every machine, and
+  `tests/package.test.ts` re-renders both and compares pixels so the committed
+  files cannot drift from the script. The icon is embedded in the packaged
+  `.pbiviz` as `content.iconBase64`; the listing logo is not.
 - `assets/screenshots/*.png` - three 1366x768 PNGs, each under 1024 KB. They are
   real renders of the packaged bundle driven by native browser input, not
   mock-ups; see `scripts/screenshot-harness/`.

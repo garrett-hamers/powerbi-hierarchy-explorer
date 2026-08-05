@@ -128,17 +128,20 @@ describe("certification-first package contract", () => {
     }
   });
 
-  test("ships brand marks that are reproducible from their generator and genuinely antialiased", () => {
+  test("ships brand marks that are reproducible from their generator", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readPngMetadata, readPngPixels } = require("../scripts/read-png-metadata.cjs");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { ASSETS, renderMark, MIN_COLORS } = require("../scripts/build-brand-assets.cjs");
 
-    // Per asset class, not one shared number: a 20x20 icon has 400 pixels and
-    // only its curves can carry intermediate tones, so healthy icons sit far
-    // below healthy 300x300 logos. One floor would either reject a good icon or
-    // pass a degenerate logo.
-    expect(MIN_COLORS).toEqual({ 300: 16, 20: 8 });
+    // The colour floor is a logo-only gate, because it catches one specific
+    // defect: a 300x300 logo produced by upscaling the icon, which arrives as a
+    // valid PNG at the right size carrying only the inks it was drawn with.
+    // A 20x20 icon gets no floor - a distinct-colour count measures what a mark
+    // depicts rather than how well it is made, and this one is whole-pixel
+    // rectangles with nothing to antialias, so two colours is correct rather
+    // than degenerate. Pixel parity below is the gate that actually protects it.
+    expect(MIN_COLORS).toEqual({ 300: 16 });
     expect(ASSETS.map((asset: { relativePath: string }) => asset.relativePath)).toEqual([
       "assets/partner-center-logo.png",
       "assets/icon.png"
@@ -150,10 +153,10 @@ describe("certification-first package contract", () => {
       expect(metadata.width).toBe(asset.size);
       expect(metadata.height).toBe(asset.size);
 
-      // Both marks were previously two flat colours with no intermediate tones,
-      // so every curve stair-stepped. These are the floors the publication gate
-      // in scripts/validate-publication-assets.cjs enforces.
-      expect(metadata.distinctColors).toBeGreaterThanOrEqual(MIN_COLORS[asset.size]);
+      const floor = MIN_COLORS[asset.size];
+      if (floor !== undefined) {
+        expect(metadata.distinctColors).toBeGreaterThanOrEqual(floor);
+      }
 
       // Re-rendering from the committed geometry must reproduce the committed
       // pixels, so neither asset can drift away from the script that made it.
@@ -165,6 +168,23 @@ describe("certification-first package contract", () => {
       expect(rendered.rgba).toHaveLength(asset.size * asset.size * 4);
       expect(Buffer.from(rendered.rgba).equals(committed.pixels)).toBe(true);
     }
+  });
+
+  test("draws the 20x20 icon on whole pixels so nothing is antialiased", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readPngPixels } = require("../scripts/read-png-metadata.cjs");
+
+    // The icon is axis-aligned rectangles only. Antialiasing exists to smooth
+    // curves and diagonals, so here it could only soften edges that are
+    // otherwise pixel-exact. Asserting the two inks keeps that property from
+    // being lost to a well-meaning "improvement" that moves a coordinate off a
+    // whole pixel: any fractional edge would immediately introduce a blend.
+    const { pixels, channels } = readPngPixels(path.join(root, "assets", "icon.png"));
+    const inks = new Set<string>();
+    for (let offset = 0; offset + channels <= pixels.length; offset += channels) {
+      inks.add(`${pixels[offset]},${pixels[offset + 1]},${pixels[offset + 2]},${pixels[offset + 3]}`);
+    }
+    expect([...inks].sort()).toEqual(["255,255,255,255", "39,100,196,255"]);
   });
 
   test("packages the icon this repository generates and gates", () => {

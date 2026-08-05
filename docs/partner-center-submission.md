@@ -77,7 +77,7 @@ alone never moves the hash.
 | Requirement | Value | Status |
 | --- | --- | --- |
 | Logo, PNG, exactly 300x300 | `assets/partner-center-logo.png` | Present. 300x300, 8-bit RGBA, 4089 bytes, 57 distinct colours. Rendered by `npm run brand-assets`. |
-| Visualization pane icon, PNG, exactly 20x20 | `assets/icon.png` | Present. 20x20, 8-bit RGBA, 496 bytes, 27 distinct colours. Same mark and same `#2764C4` as the logo, rendered by `npm run brand-assets`. Embedded in the package as `content.iconBase64`. |
+| Visualization pane icon, PNG, exactly 20x20 | `assets/icon.png` | Present. 20x20, 8-bit RGBA, 138 bytes. Same tree motif and `#2764C4` as the logo, drawn on whole pixels so nothing is antialiased. Rendered by `npm run brand-assets`. Embedded in the package as `content.iconBase64`. |
 | Screenshots, 1-5, PNG, exactly 1366x768, each <= 1024 KB | `assets/screenshots/01-hierarchy-overview.png`<br>`assets/screenshots/02-expand-collapse.png`<br>`assets/screenshots/03-search-diagnostics.png` | Present. All 1366x768, all well under 1024 KB. |
 | Support URL, https | `https://atlyn.io/contact` | Live. |
 | Privacy policy URL, https | `https://atlyn.io/legal/privacy` | Live. |
@@ -284,35 +284,39 @@ npm audit
 `npm run validate-publication-assets` (invoked by both `npm run package` and
 `npm run certification-audit`) is the gate for this document. It fails the build
 if the logo is not exactly 300x300 or carries fewer than 16 distinct colours, if
-the icon is not exactly 20x20 or carries fewer than 8, if `pbiviz.json` packages
-an icon other than the one just checked, if there are not between 1 and 5
-screenshots at exactly 1366x768 and at most 1024 KB, if any image is a flat
-placeholder, if a required `pbiviz.json` field is missing, if the version is not
-four-part, if the support or privacy URL is not `https://`, if the author email
-is a placeholder or `noreply` address, or if `EULA.md` or this dossier is
-missing. It needs only Node, so CI runs it without a browser.
+the icon is not exactly 20x20, if `pbiviz.json` packages an icon other than the
+one just checked, if there are not between 1 and 5 screenshots at exactly
+1366x768 and at most 1024 KB, if any image is a flat placeholder, if a required
+`pbiviz.json` field is missing, if the version is not four-part, if the support
+or privacy URL is not `https://`, if the author email is a placeholder or
+`noreply` address, or if `EULA.md` or this dossier is missing. It needs only
+Node, so CI runs it without a browser.
 
-The colour floors are what stop a hard-edged mark reaching the offer card or the
-visualization pane. Microsoft's image guidance asks for artwork that is not
-"poorly rendered", and a two-tone image has no intermediate tones for a curve to
-land on, so it stair-steps.
+The logo's colour floor catches one specific defect: a 300x300 logo produced by
+upscaling the 20x20 icon, which arrives as a valid PNG at the right dimensions
+carrying only the two inks it was drawn with, and stair-steps on the offer card
+because it has no intermediate tones. Microsoft's image guidance asks for artwork
+that is not "poorly rendered". 16 sits below the healthiest-known simple logo in
+the portfolio (20 colours), so a legitimately simpler redesign is not tripped,
+while a two-tone upscale fails by 8x. The committed logo carries 57.
 
-They are deliberately **per asset class**, because one number does not transfer
-between canvas sizes. A 20x20 icon has 400 pixels and only its curves can carry
-intermediate tones, so healthy icons across this portfolio land between 10 and
-118 colours while healthy 300x300 logos land between 20 and 194. A floor
-calibrated on logos would reject a perfectly good icon; one calibrated on icons
-would wave a degenerate logo through. A *ratio* does not transfer either, since
-it scales inversely with canvas area - the same two-colour defect is 0.002% of a
-logo but 0.5% of an icon.
+**The icon deliberately has no colour floor.** A distinct-colour count measures
+what a mark depicts rather than how well it is made: across this portfolio the
+icons run from 10 to 118 colours purely because some draw scattered points or
+graded fills, while a tree diagram is inherently two-tone - boxes and connectors,
+one ink on one ground. The icon here is whole-pixel axis-aligned rectangles with
+no curve or diagonal anywhere, so there is nothing for antialiasing to smooth and
+it resolves to exactly two colours by construction. A floor would only force
+fractional geometry and blur edges that are currently pixel-exact, which is the
+metric driving the artwork rather than the reverse.
 
-| Asset | Floor | Committed | Headroom |
-| --- | --- | --- | --- |
-| `assets/partner-center-logo.png` (300x300) | 16 | 57 | 3.6x |
-| `assets/icon.png` (20x20) | 8 | 27 | 3.4x |
-
-Each floor sits below the healthiest-known minimum for its class, so a legitimate
-simpler redesign is not tripped, while a two-tone asset still fails by 4x to 8x.
+The icon is not ungated. It is checked for exact dimensions, real PNG structure,
+and that `pbiviz.json` packages the very file inspected - and `tests/package.test.ts`
+re-renders it from the committed geometry and compares pixels, which catches
+corruption, drift or a silent revert regardless of colour count and is strictly
+stronger than counting for that purpose. A separate test asserts the mark still
+resolves to exactly its two inks, so moving a coordinate off a whole pixel is
+caught too.
 
 Both marks are rendered, not hand-drawn, and need only Node:
 
