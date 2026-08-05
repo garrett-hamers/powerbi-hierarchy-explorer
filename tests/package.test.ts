@@ -223,6 +223,9 @@ describe("certification-first package contract", () => {
     for (const rule of ["*.resjson text eol=lf", "*.svg text eol=lf", "*.less text eol=lf"]) {
       expect(gitattributes).toContain(rule);
     }
+    // Written by the capture and read back by the publication gate, so a
+    // platform-converted checkout would show a whole-file diff on the next run.
+    expect(gitattributes).toContain("assets/screenshot-capture.json text eol=lf");
     // The sample report's embedded copy of the package is compared byte for
     // byte, so it must never be converted at all.
     expect(gitattributes).toContain("samples/**/CustomVisuals/** -text");
