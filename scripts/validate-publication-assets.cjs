@@ -6,7 +6,8 @@
  * filled-in submission form values):
  *   - pbiviz.json carries name, display name, GUID, a four-part version,
  *     description, support URL, author name and author email
- *   - the Partner Center logo is a real 300x300 PNG
+ *   - the Partner Center logo is a real 300x300 PNG carrying genuinely
+ *     antialiased artwork rather than a flat placeholder
  *   - 1 to 5 screenshots exist, each a real PNG at exactly 1366x768 and at most
  *     1024 KB
  *   - the support and privacy policy URLs are https
@@ -41,8 +42,15 @@ const SAMPLE_PROJECT = "samples/AtlynHierarchyExplorerSample.pbip";
 
 // A single flat rectangle is what a fabricated placeholder looks like; genuine
 // artwork always clears these thresholds. Screenshots contain antialiased text,
-// so they sit far above the logo's flat two-colour brand mark.
-const MIN_LOGO_COLORS = 2;
+// so they sit far above the logo.
+//
+// The logo threshold is deliberately well above a hard-edged two-tone mark. Any
+// image whose curves and diagonals are genuinely antialiased carries dozens of
+// intermediate tones, while a flat placeholder - or an icon nearest-neighbour
+// upscaled to 300x300 - carries only the handful of colours it was drawn with
+// and would stair-step on the AppSource offer card. `npm run logo` renders the
+// committed mark and reports its count, currently comfortably above this floor.
+const MIN_LOGO_COLORS = 24;
 const MIN_SCREENSHOT_COLORS = 64;
 
 const failures = [];
@@ -201,7 +209,10 @@ if (failures.length > 0) {
   throw new Error(`Publication assets are not submission ready:\n  - ${failures.join("\n  - ")}`);
 }
 
-console.log(`Validated ${LOGO.path} ${logo.width}x${logo.height} ${logo.sha256}`);
+console.log(
+  `Validated ${LOGO.path} ${logo.width}x${logo.height} ${logo.bytes} bytes ` +
+    `${logo.distinctColors} distinct colours ${logo.sha256}`
+);
 for (const screenshot of screenshots) {
   console.log(
     `Validated ${screenshot.path} ${screenshot.width}x${screenshot.height} ${screenshot.bytes} bytes ${screenshot.sha256}`
