@@ -71,6 +71,37 @@ const SAMPLE_PROJECT = "samples/AtlynHierarchyExplorerSample.pbip";
 // legitimately simpler redesign is not tripped, while a two-tone upscale fails
 // by 8x. `npm run brand-assets` reports the committed count.
 const MIN_LOGO_COLORS = 16;
+
+// Catastrophic-blankness detector, NOT a quality gate. Read this before changing
+// the number.
+//
+// A screenshot's colour count tracks what the scene contains, so it cannot
+// separate a correct render from a wrong-but-plausible one. Across this
+// portfolio the correct renders span 261 (funnel, whose flat design is meant to
+// be that sparse) to 3,101 (scatter, which plots many coloured points), and one
+// sibling's entirely correct captures are ~95-97% white by pixel share. No
+// single threshold sorts good from bad across that range.
+//
+// 64 is therefore set far below every one of those minima on purpose. All it can
+// catch is a capture that is essentially blank - a harness that rendered nothing,
+// a viewport that never painted - which is a failure mode no amount of design
+// variation produces.
+//
+// So: never calibrate this against the screenshots in THIS repository. They
+// currently sit at 771-923 colours, which makes 64 look uselessly slack and
+// invites "tightening" it to something like 500 - a change that would reject a
+// sibling's correct 261-colour renders outright. Raising it toward local numbers
+// converts a safe liveness check into exactly the kind of false-positive gate
+// that shipping-a-flat-logo taught us to avoid, only in the other direction.
+//
+// What actually verifies screenshot content is the capture harness, which
+// asserts per-scene expectations at capture time while the DOM and scenario
+// state are still available, and hard-fails before writing a PNG. Those
+// assertions are pinned to the committed bytes through
+// assets/screenshot-capture.json, which this script re-checks below. That is the
+// strongest check available for browser-rendered assets, which - unlike the
+// deterministically generated brand marks above - cannot be re-rendered and
+// pixel-diffed because font rasterisation and browser version vary by machine.
 const MIN_SCREENSHOT_COLORS = 64;
 
 const failures = [];
