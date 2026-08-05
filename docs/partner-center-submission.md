@@ -149,19 +149,56 @@ and would satisfy every other gate here.
 `assets/screenshot-capture.json` closes that. Capture writes it alongside the
 images: for each scene, the measurements it was accepted on - element counts and
 geometry, not a bare pass or fail - and the SHA-256 of the bytes published for
-it.
+it, plus the SHA-256 of the compiled visual they were drawn from.
 
 | Asserted where | What it checks |
 | --- | --- |
 | `npm run screenshots` | The scene renders what it claims, before the PNG is written |
-| `npm run validate-publication-assets` | Every committed PNG still hashes to what capture recorded, and every recorded scene is still committed |
-| `npm test` | The same hash comparison, so it holds without a browser or a package build |
+| `npm run validate-publication-assets` | Every committed PNG still hashes to what capture recorded, every recorded scene is still committed, and all of them were captured from the compiled visual this source builds |
+| `npm test` | The same per-image hash comparison, so it holds without a browser or a package build |
 | `npm run verify-package` | The release manifest carries the capture evidence and agrees with it |
 | `npm run verify-screenshots` (CI) | The current source still renders what the record describes |
 
 This is a hash comparison against the bytes capture published. It is **not** a
 golden image and must not become one: renders are not bit-stable, so a
 re-render comparison would fail for reasons unrelated to correctness.
+
+### Why the compiled visual is hashed, and not the version or the package
+
+`visualVersion` cannot tie a screenshot to a build. It is a hand-written string,
+and `1.0.1.0` has already covered more than one package in this repository - the
+listing logo and the icon were both revised under it. Two screenshots captured
+from materially different code carry an identical version, so the version alone
+can never answer "do these images still show this build?".
+
+The hash is taken over the compiled bundle - `content.js` and `content.css` from
+`.tmp/drop/pbiviz.json` - rather than over the packaged `.pbiviz`. The package
+also embeds the 20x20 icon, and when that icon was revised the package hash moved
+while every screenshot pixel stayed identical, because the icon appears in no
+screenshot. Keying the screenshots to the package hash would have demanded a
+re-capture that changed nothing, and needless churn is how a gate earns a reflex
+to bypass it. The bundle hash moves when, and only when, the code that draws the
+scenes moves.
+
+This is the check that catches what the per-scene measurements cannot. Recolour
+every node and the counts, the geometry, the status line and the breadcrumb are
+all untouched, while the committed images stop showing the product. Verified by
+doing exactly that: changing one fill colour left every measured value identical
+and was caught by the bundle hash alone.
+
+### Why re-capture does not churn the committed images
+
+Because renders are not bit-stable, re-running the capture would otherwise
+rewrite all three PNGs with a few pixels of noise every time. A scene's
+committed bytes are therefore kept when the bundle hash is unchanged and its
+measurements still agree; anything else republishes.
+
+The condition is the bundle hash and deliberately not the measurements alone.
+Equal measurements do not mean an equal picture - that is the recolour case
+above - so retaining on unchanged measurements would reopen the very gap the
+bundle hash exists to close. Keying retention to the bundle keeps one clean
+guarantee: **every committed screenshot was rendered from the bundle the record
+names.**
 
 Screenshot bytes are deliberately **not** asserted to be reproducible against a
 re-render, because font rasterisation differs between machines - and,
