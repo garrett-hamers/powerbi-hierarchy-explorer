@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { readPngMetadata } = require("./read-png-metadata.cjs");
+const { readVisualBundle } = require("./read-visual-bundle.cjs");
 
 // The privacy policy is a Partner Center form value rather than a pbiviz field,
 // so the validator owns it and the manifest records what was submitted.
@@ -23,6 +24,16 @@ const screenshotDirectory = path.join(root, "assets", "screenshots");
 const captureRecord = JSON.parse(
   fs.readFileSync(path.join(root, "assets", "screenshot-capture.json"), "utf8")
 );
+// validate-publication-assets has already compared this, and package runs it
+// first. Repeating it keeps the manifest from ever recording a build identity
+// that disagrees with the bundle it was written from - recording without
+// asserting is how a wrong value survives a build.
+const bundle = readVisualBundle();
+if (captureRecord.capturedWith.bundleSha256 !== bundle.sha256) {
+  throw new Error(
+    `the screenshots were captured from compiled visual ${captureRecord.capturedWith.bundleSha256} but this source compiles to ${bundle.sha256}; re-run "npm run screenshots"`
+  );
+}
 const capturedScenes = new Map(captureRecord.scenes.map((scene) => [scene.path, scene]));
 const screenshots = fs
   .readdirSync(screenshotDirectory)
@@ -81,8 +92,7 @@ const releaseManifest = {
     // comparison would fail for reasons unrelated to correctness, while a hash
     // still catches a file edited or swapped after capture.
     screenshots,
-    screenshotCapture: captureRecord.capturedWith,
-    eula: "EULA.md",
+    screenshotCapture: captureRecord.capturedWith,    eula: "EULA.md",
     submissionDossier: "docs/partner-center-submission.md"
   },
   hashPolicy:

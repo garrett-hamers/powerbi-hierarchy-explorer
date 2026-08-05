@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const JSZip = require("jszip");
+const { readVisualBundle } = require("./read-visual-bundle.cjs");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
@@ -125,6 +126,14 @@ if (fs.existsSync(releaseManifestPath)) {
     releaseManifest.publicationAssets.screenshotCapture.visualVersion,
     sourceManifest.visual.version,
     "the screenshots must have been captured from the version being released"
+  );
+  // The version is a hand-written string that has already covered more than one
+  // package in this repository, so the compiled bundle is what actually ties
+  // the screenshots to a build.
+  assert.equal(
+    releaseManifest.publicationAssets.screenshotCapture.bundleSha256,
+    readVisualBundle().sha256,
+    "the screenshots must have been captured from the compiled visual being released"
   );
 }
 

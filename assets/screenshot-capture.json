@@ -1,8 +1,9 @@
 {
-  "documentation": "Written by npm run screenshots. Each sha256 pins the committed bytes the assertions were applied to; it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison.",
+  "documentation": "Written by npm run screenshots. Each sha256 pins the committed bytes the assertions were applied to; it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison. bundleSha256 is the compiled visual those bytes were drawn from, and is compared against the bundle on disk so a screenshot cannot outlive the build it shows.",
   "capturedWith": {
     "visualGuid": "atlynHierarchyExplorer",
     "visualVersion": "1.0.1.0",
+    "bundleSha256": "770A33AEA3457AA4ADDD9C1E5DD9BD79DD5DC82131AEDF71A808210118DF2D0A",
     "browser": "playwright-chromium",
     "viewport": "1366x768"
   },
@@ -58,7 +59,7 @@
       "id": "02-expand-collapse",
       "path": "assets/screenshots/02-expand-collapse.png",
       "bytes": 61004,
-      "sha256": "8ADBF7BE35D9E2EE221A49EC26566086F6FFB976EDC7898C756F856E1A4B6A61",
+      "sha256": "20C826634A0A13A79EEFA7CA995903B2A45070638D56D335E9BEE36A27D5FAEE",
       "asserted": {
         "cards": 8,
         "edges": 7,
