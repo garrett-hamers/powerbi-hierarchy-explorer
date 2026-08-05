@@ -159,8 +159,19 @@ function findEscapes(elements, options = {}) {
       // Inside a scroller the question is not "is it on screen now" but "does
       // any scroll offset bring it on screen". Content laid out at a negative
       // offset, or past the scrollable extent, is unreachable at every offset.
+      //
+      // A record claiming scrollExempt without content is rejected rather than
+      // skipped. Skipping it returns "no violation" for an element nothing
+      // measured, which is indistinguishable from a clean result - the rule
+      // would report success without having engaged with the thing at all. The
+      // measuring layer sets both fields together, so this cannot fire today;
+      // it exists so that a future one which forgets fails loudly instead of
+      // quietly shrinking what the walk covers.
       if (!element.content) {
-        return;
+        throw new TypeError(
+          `${element.path || "an element"} is marked scrollExempt but carries no content box, ` +
+            "so its reachability cannot be decided. A record that cannot be measured must not be reported as clean."
+        );
       }
       const reach = {
         left: 0,
@@ -284,7 +295,25 @@ function checkScrollRegions(regions, options = {}) {
   });
   (options.mustOverflow || []).forEach((path) => {
     const region = found.get(path);
+    /*
+     * A region required to overflow that is not a scroll container at all is
+     * reported here rather than skipped. Today every mustOverflow path is also
+     * an expected path, so the loop above already names it - but that is a
+     * property of the configuration, not of this function, and a mustOverflow
+     * entry added without a matching expected entry would otherwise vanish
+     * silently. The whole point of this rule is that a precondition which
+     * cannot be met must fail loudly, and "the region is missing" is the
+     * strongest way for it not to be met.
+     */
     if (!region) {
+      violations.push(
+        violation(
+          RULES.scrollPreconditionUnmet,
+          path,
+          "is required to overflow but is not a scroll container at all, so the state it was named for " +
+            "cannot exercise scrolling and every scroll-time assertion about it would pass vacuously"
+        )
+      );
       return;
     }
     const scrollableDown = finite(region.scrollHeight, "scrollHeight") > finite(region.clientHeight, "clientHeight");
