@@ -29,6 +29,19 @@ export interface LayoutResult {
   height: number;
 }
 
+/**
+ * Average glyph advance as a fraction of the font size, used to size a node
+ * card from the text it has to hold. Exported because the renderer has to trim
+ * labels against the same estimate: if the two ever disagree, either cards are
+ * drawn too narrow for text that was not trimmed, or text is trimmed that would
+ * have fitted. Arial and the common Linux substitutes all average below this.
+ */
+export const GLYPH_WIDTH_RATIO = 0.58;
+
+/** Horizontal inset between a node card's edge and its text, per side. */
+export const NODE_TEXT_INSET = 8;
+
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -40,8 +53,11 @@ function nodeWidth(node: HierarchyNode, options: LayoutOptions): number {
   }
   const fontSize = Math.max(8, options.fontSize ?? 12);
   const subtitleSize = Math.max(7, options.subtitleFontSize ?? 10);
-  const longestText = Math.max(node.label.length * fontSize * 0.58, node.subtitle.length * subtitleSize * 0.58);
-  return clamp(Math.ceil(longestText + 24), minimum, minimum * 2.5);
+  const longestText = Math.max(
+    node.label.length * fontSize * GLYPH_WIDTH_RATIO,
+    node.subtitle.length * subtitleSize * GLYPH_WIDTH_RATIO
+  );
+  return clamp(Math.ceil(longestText + NODE_TEXT_INSET * 3), minimum, minimum * 2.5);
 }
 
 /**

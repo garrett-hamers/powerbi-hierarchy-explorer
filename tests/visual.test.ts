@@ -229,7 +229,11 @@ describe("Visual interactions and lifecycle", () => {
     expect(root.style.getPropertyValue("--atlyn-background")).toBe("#101010");
     expect(root.style.getPropertyValue("--atlyn-selected")).toBe("#00ff00");
     expect(element.querySelector(".atlyn-search")?.getAttribute("aria-label")).toBe("بحث");
-    expect(element.querySelector(".atlyn-node-label")?.getAttribute("text-anchor")).toBe("end");
+    // The layout mirrors every x coordinate for RTL, and text-anchor is
+    // resolved against the inline direction, so "start" is the card's right
+    // inner edge here. Anchoring at "end" as well was a second flip that drew
+    // each label out of its own card.
+    expect(element.querySelector(".atlyn-node-label")?.getAttribute("text-anchor")).toBe("start");
     visual.destroy();
   });
 

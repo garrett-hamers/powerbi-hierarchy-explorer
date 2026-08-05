@@ -46,5 +46,14 @@ module.exports = [
     rules: {
       "powerbi-visuals/non-literal-fs-path": "off"
     }
+  },
+  {
+    // The layout rules are a CommonJS module under scripts/ so the probe and the
+    // regression prover can load them without a build step. This test drives the
+    // same module, so it loads it the same way.
+    files: ["tests/layout-rules.test.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off"
+    }
   }
 ];

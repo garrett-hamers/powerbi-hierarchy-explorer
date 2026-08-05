@@ -18,7 +18,7 @@ import {
   readFormattingValues
 } from "./formatting";
 import { getLocaleStrings, isRtlLocale, LocalizedStrings } from "./localization";
-import { computeLayout, LayoutResult } from "./layout";
+import { computeLayout, GLYPH_WIDTH_RATIO, LayoutResult, NODE_TEXT_INSET } from "./layout";
 
 type VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 type VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
@@ -56,6 +56,78 @@ const DEPTH_CAP = 50;
 const RENDER_NODE_CAP = 2000;
 const MAX_SEGMENT_REQUESTS = 32;
 const LONG_PRESS_MS = 550;
+
+/*
+ * A Power BI host tile clips at its own edge with no scrollbar and no
+ * affordance, so chrome that does not fit is not merely cramped - it is gone,
+ * and so is anything the flex column pushed past it. Below these viewport
+ * thresholds the visual drops chrome instead of overflowing with it. Measured
+ * against the tile the host reports, which is the same number the packaged
+ * stylesheet's width media queries resolve against inside the visual's iframe.
+ */
+type Density = "comfortable" | "compact" | "minimal";
+
+const COMPACT_MAX_HEIGHT = 240;
+const COMPACT_MAX_WIDTH = 320;
+const MINIMAL_MAX_HEIGHT = 140;
+const MINIMAL_MAX_WIDTH = 200;
+
+/*
+ * What the diagnostics strip costs when it is showing. It is capped at 86px by
+ * the stylesheet and reaches that cap on any dataset with more than a couple of
+ * quality problems, so this is the height it takes out of the tile rather than
+ * an estimate of it.
+ */
+const DIAGNOSTICS_STRIP_HEIGHT = 86;
+
+/* What the accessible tree pane costs while it holds focus, per the stylesheet. */
+const TREE_PANE_FRACTION = 0.38;
+
+/*
+ * Density is resolved against the height that is actually left for the chart,
+ * not the raw tile height. Only .atlyn-canvas-wrap can shrink, so every strip
+ * that appears is paid for entirely by the drawing area: with a diagnostics
+ * message present and the tree holding focus, a 398x298 tile has as little room
+ * for the chart as a 398x99 tile has with neither, and it should degrade its
+ * chrome accordingly. Sizing the chrome by the tile alone is what lets the
+ * toolbar, the diagnostics strip and a focused tree pane all survive at full
+ * size while the chart they surround is reduced to a sliver.
+ */
+function resolveDensity(width: number, height: number, chromeCost = 0): Density {
+  const available = height - chromeCost;
+  if (available < MINIMAL_MAX_HEIGHT || width < MINIMAL_MAX_WIDTH) {
+    return "minimal";
+  }
+  if (available < COMPACT_MAX_HEIGHT || width < COMPACT_MAX_WIDTH) {
+    return "compact";
+  }
+  return "comfortable";
+}
+
+/**
+ * Trims drawn text to the card drawn around it, using the same glyph estimate
+ * the card was sized with so that anything which fits is never trimmed. Only
+ * the drawing is trimmed: the accessible tree and the tooltip still carry the
+ * whole value, and the SVG is aria-hidden.
+ */
+function fitToCard(value: string, cardWidth: number, fontSize: number): string {
+  if (!value) {
+    return value;
+  }
+  const available = cardWidth - NODE_TEXT_INSET * 2;
+  const perGlyph = Math.max(1, fontSize * GLYPH_WIDTH_RATIO);
+  const maxGlyphs = Math.floor(available / perGlyph);
+  if (maxGlyphs <= 0) {
+    return "";
+  }
+  if (value.length <= maxGlyphs) {
+    return value;
+  }
+  if (maxGlyphs === 1) {
+    return "\u2026";
+  }
+  return `${value.slice(0, maxGlyphs - 1).replace(/\s+$/, "")}\u2026`;
+}
 
 type RequiredRole = "NodeId" | "ParentId" | "Label";
 
@@ -144,6 +216,8 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   private typeaheadTimer: ReturnType<typeof setTimeout> | undefined;
   private suppressedClickTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
+  private diagnosticsShown = false;
+  private treeFocused = false;
   private lastUpdateOptions: VisualUpdateOptions | undefined;
   private longPressTimer: ReturnType<typeof setTimeout> | undefined;
   private suppressNextClick = false;
@@ -272,6 +346,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.semanticTree.addEventListener("contextmenu", this.onSemanticTreeContextMenu);
     this.semanticTree.addEventListener("keydown", this.onSemanticTreeKeyDown);
     this.semanticTree.addEventListener("focusin", this.onSemanticTreeFocusIn);
+    this.semanticTree.addEventListener("focusout", this.onSemanticTreeFocusOut);
     this.semanticTree.addEventListener("touchstart", this.onSemanticTreeTouchStart, { passive: true });
     this.semanticTree.addEventListener("touchend", this.onTouchEnd, { passive: false });
     this.semanticTree.addEventListener("touchcancel", this.onTouchCancel, { passive: true });
@@ -279,6 +354,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.cleanup.push(() => this.semanticTree.removeEventListener("contextmenu", this.onSemanticTreeContextMenu));
     this.cleanup.push(() => this.semanticTree.removeEventListener("keydown", this.onSemanticTreeKeyDown));
     this.cleanup.push(() => this.semanticTree.removeEventListener("focusin", this.onSemanticTreeFocusIn));
+    this.cleanup.push(() => this.semanticTree.removeEventListener("focusout", this.onSemanticTreeFocusOut));
     this.cleanup.push(() => this.semanticTree.removeEventListener("touchstart", this.onSemanticTreeTouchStart));
     this.cleanup.push(() => this.semanticTree.removeEventListener("touchend", this.onTouchEnd));
     this.cleanup.push(() => this.semanticTree.removeEventListener("touchcancel", this.onTouchCancel));
@@ -774,10 +850,31 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onSemanticTreeFocusIn = (event: FocusEvent): void => {
+    this.treeFocused = true;
+    this.root.dataset.treeFocused = "true";
+    // The pane it opens is chrome the chart pays for, so the density has to be
+    // recomputed here: focus does not re-render, and without this the visual
+    // keeps sizing its chrome for a tile that no longer has that room.
+    this.applyDensity();
     const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
     if (id) {
       this.focusedId = id;
     }
+  };
+
+  /*
+   * The stylesheet needs this as an attribute rather than :focus-within on a
+   * later sibling, because what has to react is the toolbar above the tree and
+   * CSS cannot select backwards.
+   */
+  private onSemanticTreeFocusOut = (event: FocusEvent): void => {
+    const next = event.relatedTarget as Node | null;
+    if (next && this.semanticTree.contains(next)) {
+      return;
+    }
+    this.treeFocused = false;
+    this.root.dataset.treeFocused = "false";
+    this.applyDensity();
   };
 
   private onSemanticTreeTouchStart = (event: TouchEvent): void => {
@@ -825,6 +922,10 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       this.lastUpdateOptions?.viewport?.width ?? this.canvasWrap.clientWidth ?? 320
     );
     const height = Math.max(150, this.lastUpdateOptions?.viewport?.height ?? 280);
+    const renderCapped = visibleIds.length > renderIds.length;
+    this.diagnosticsShown =
+      this.formatting.showDiagnostics && (this.graph.diagnostics.length > 0 || renderCapped);
+    this.applyDensity();
     const layout = computeLayout(this.graph, visibleIds, {
       width,
       height,
@@ -846,7 +947,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.renderEdges(layout, renderIds);
     renderIds.forEach((id) => this.renderSvgNode(id, layout));
     this.renderSemanticTree(renderIds);
-    this.renderDiagnostics(visibleIds.length > renderIds.length);
+    this.renderDiagnostics(renderCapped);
     this.renderBreadcrumb();
     this.renderStatus(visibleIds.length, renderIds.length);
     const activeId = this.focusedId && this.graph.nodes.has(this.focusedId) ? this.focusedId : renderIds[0];
@@ -865,8 +966,24 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     }
   }
 
-  private renderEdges(layout: LayoutResult, visibleIds: readonly string[]): void {
-    const visible = new Set(visibleIds);
+  /**
+   * Publishes the tile size as a density class the stylesheet can act on. The
+   * host tile is the authority: below the thresholds there is no room for the
+   * chrome alongside a drawing area, and a strip that does not fit is dropped
+   * rather than pushed past the clipped edge where it silently disappears and
+   * takes the canvas with it.
+   */
+  private applyDensity(): void {
+    const width = this.lastUpdateOptions?.viewport?.width ?? this.root.clientWidth;
+    const height = this.lastUpdateOptions?.viewport?.height ?? this.root.clientHeight;
+    const diagnosticsCost = this.diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0;
+    const treeCost = this.treeFocused ? Math.round(height * TREE_PANE_FRACTION) : 0;
+    const chromeCost = diagnosticsCost + treeCost;
+    this.root.dataset.density =
+      width > 0 && height > 0 ? resolveDensity(width, height, chromeCost) : "comfortable";
+  }
+
+  private renderEdges(layout: LayoutResult, visibleIds: readonly string[]): void {    const visible = new Set(visibleIds);
     visibleIds.forEach((id) => {
       const node = this.graph.nodes.get(id);
       const point = layout.points.get(id);
@@ -909,14 +1026,23 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     card.setAttribute("rx", "4");
     group.appendChild(card);
 
-    const textAnchor = this.direction === "rtl" ? "end" : "start";
-    const textX = this.direction === "rtl" ? point.x + point.width - 8 : point.x + 8;
+    /*
+     * text-anchor is resolved against the inline direction, not against the
+     * screen: under direction: rtl, "start" is the right-hand edge. The layout
+     * has already mirrored every x coordinate, so flipping the anchor as well
+     * was a second flip - it anchored the end of the string at the card's right
+     * inner edge and drew the text rightwards, straight out of its own card and
+     * past the SVG that clips it. Anchoring at "start" in both directions lets
+     * the single mirror in computeLayout do the whole job.
+     */
+    const textAnchor = "start";
+    const textX = this.direction === "rtl" ? point.x + point.width - NODE_TEXT_INSET : point.x + NODE_TEXT_INSET;
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
     label.classList.add("atlyn-node-label");
     label.setAttribute("x", String(textX));
     label.setAttribute("y", String(point.y + Math.min(point.height - 8, this.formatting.fontSize + 7)));
     label.setAttribute("text-anchor", textAnchor);
-    label.textContent = node.label;
+    label.textContent = fitToCard(node.label, point.width, this.formatting.fontSize);
     group.appendChild(label);
     if (node.subtitle) {
       const subtitle = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -924,7 +1050,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       subtitle.setAttribute("x", String(textX));
       subtitle.setAttribute("y", String(point.y + Math.min(point.height - 3, this.formatting.fontSize + this.formatting.subtitleFontSize + 12)));
       subtitle.setAttribute("text-anchor", textAnchor);
-      subtitle.textContent = node.subtitle;
+      subtitle.textContent = fitToCard(node.subtitle, point.width, this.formatting.subtitleFontSize);
       group.appendChild(subtitle);
     }
     this.graphSvg.appendChild(group);

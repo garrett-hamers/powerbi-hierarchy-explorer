@@ -3,7 +3,7 @@
   "capturedWith": {
     "visualGuid": "atlynHierarchyExplorer",
     "visualVersion": "1.0.1.0",
-    "bundleSha256": "770A33AEA3457AA4ADDD9C1E5DD9BD79DD5DC82131AEDF71A808210118DF2D0A",
+    "bundleSha256": "8407273EDC350102E4DBF8A67E95A8016B8D9B0FECE516EF1312C82BA9D222D8",
     "browser": "playwright-chromium",
     "viewport": "1366x768"
   },

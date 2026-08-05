@@ -109,3 +109,71 @@ npm run verify-reproducible-package
 npm run certification-audit
 npm audit
 ```
+
+## Layout probe
+
+A Power BI host renders a visual inside a tile with `overflow: hidden`. Content
+laid out beyond that tile is not scrolled to and not scrollbarred - it is
+discarded, and nothing on screen says so. `npm run probe-layout` loads the
+packaged `.pbiviz` in headless Chromium and measures every element's
+`getBoundingClientRect()` against the box that actually clips it, ignoring
+anything a user could reach by scrolling a genuine `overflow: auto` ancestor.
+
+It probes five host tile sizes (1280x620 down to 80x80), nine states (fully
+expanded, partially expanded, fully collapsed, accessible tree focused, long
+labels, `ar-SA` with both Arabic and Latin labels, and diagnostics present both
+with and without the accessible tree focused) and four scroll offsets per state
+- the offset the browser itself chose, then every scrollable region forced to
+its top, middle and maximum, with the whole escape walk re-run at each. 180
+cases in all.
+
+The diagnostics states matter more than their count suggests. The diagnostics
+strip is `display: none` until the data has something wrong with it, and the
+accessible tree is a 1px clipped region until focus pulls it into the flow, so a
+probe fed clean data and never given a focus event never lays either of them out
+- and never sees the state where the chrome and the chart compete for a short
+tile. The bug lives in the state you did not put the visual into.
+
+Every run reports rendered heights for the graph, the scrollport onto it, the
+visible intersection of the two, whether that scrollport still scrolls, and the
+tree, toolbar and diagnostics strips, plus `root.scrollTop`, at each tile with
+diagnostics present - whether or not any rule fired. The intersection is the
+number that matters: `.atlyn-graph` carries `min-height: 170px` and scrolls, so
+it never collapses on its own, and a rule asserting the graph's own height would
+pass on a 796px chart behind a 0px window. "Does the chart survive" is answered
+by a table of measurements, not by a pass.
+
+The rules are pure functions in `scripts/layout-probe/rules.cjs`, so
+`tests/layout-rules.test.ts` can drive them with deliberately bad measurements
+rather than only ever showing them a correct render. Nothing about geometry is
+asserted in JSDOM, which has no layout engine and would return zeros.
+
+`npm run prove-layout-regressions` puts each fixed defect back into the source
+one at a time, rebuilds the package, re-runs the probe, and requires the
+matching rule to fire with at least the escape the defect originally measured.
+A fix whose removal leaves the probe green is reported as unproven and fails the
+run.
+
+Both need Playwright, which is deliberately not a dependency of this package so
+it stays off the surface `npm audit` and the certification gates inspect:
+
+```text
+npm install --no-save playwright
+npx playwright install chromium
+npm run package
+npm run probe-layout
+npm run prove-layout-regressions
+```
+
+`scripts/layout-probe/expected-regions.json` records what the probe expects to
+find - which regions scroll at which density, and that the visual contains no
+`position: sticky` or `position: fixed` element. A region that stops being a
+scroll container is reported rather than quietly dropped, because a dropped
+region silently stops carrying its own requirement.
+
+The probe reads the archive, then cross-checks the compiled bundle inside it
+against the staging drop that `npm run screenshots` and the publication gate
+read, using the same `scripts/read-visual-bundle.cjs` they use. If those ever
+disagree, the bytes the host runs are not the bytes anything else in this
+repository has looked at, and that gap between compiled and packaged is the
+reason the probe loads the archive rather than the source tree.
