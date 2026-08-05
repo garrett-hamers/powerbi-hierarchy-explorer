@@ -43,6 +43,7 @@ const { pathToFileURL } = require("node:url");
 const JSZip = require("jszip");
 
 const rules = require("./layout-probe/rules.cjs");
+const { readVisualBundle, hashBundle } = require("./read-visual-bundle.cjs");
 
 const root = path.resolve(__dirname, "..");
 const harnessDirectory = path.join(__dirname, "layout-probe", "harness");
@@ -161,9 +162,9 @@ const readPackagedBundle = async () => {
   if (!resourceEntry) {
     throw new Error(`${packages[0]} is missing the declared resource ${resource.file}`);
   }
-  const drop = JSON.parse(await resourceEntry.async("string"));
-  const js = drop.content && drop.content.js;
-  const css = drop.content && drop.content.css;
+  const packaged = JSON.parse(await resourceEntry.async("string"));
+  const js = packaged.content && packaged.content.js;
+  const css = packaged.content && packaged.content.css;
   if (!js) {
     throw new Error(`${resource.file} inside ${packages[0]} carries no compiled script`);
   }
@@ -172,12 +173,30 @@ const readPackagedBundle = async () => {
       `${resource.file} inside ${packages[0]} carries no compiled stylesheet, so the visual would render unstyled`
     );
   }
+  /*
+   * The archive is the input, but the compiled bundle inside it is cross-checked
+   * against the staging drop the screenshots and the publication gate read. If
+   * those two ever disagree, the bytes the host runs are not the bytes anything
+   * else in this repository has looked at - which is the exact gap between
+   * compiled and packaged that made reading the archive a requirement.
+   */
+  const bundleSha256 = hashBundle(js, css);
+  const staged = readVisualBundle();
+  if (staged.sha256 !== bundleSha256) {
+    throw new Error(
+      `${packages[0]} carries compiled bundle ${bundleSha256}, but .tmp/drop/pbiviz.json carries ${staged.sha256}. ` +
+        "The packaged bytes and the staged bytes have diverged, so the screenshots, the publication gate and this " +
+        "probe are not all looking at the same visual."
+    );
+  }
+
   return {
     name: packages[0],
     bytes: bytes.length,
     sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
-    guid: drop.visual.guid,
-    version: drop.visual.version,
+    bundleSha256,
+    guid: packaged.visual.guid,
+    version: packaged.visual.version,
     js,
     css
   };
@@ -377,6 +396,7 @@ const main = async () => {
   process.stdout.write(
     [
       `Probed ${bundle.name} (${bundle.bytes} bytes, sha256 ${bundle.sha256})`,
+      `Compiled bundle ${bundle.bundleSha256}, matching the staging drop the screenshots and the publication gate read`,
       `Browser: ${channel}`,
       `Root computed position: ${triage.rootPosition}`,
       `position: sticky elements: ${triage.counts.sticky}`,
@@ -489,6 +509,7 @@ const main = async () => {
         package: bundle.name,
         bytes: bundle.bytes,
         sha256: bundle.sha256,
+        bundleSha256: bundle.bundleSha256,
         browser: channel,
         triage: {
           rootPosition: triage.rootPosition,

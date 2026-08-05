@@ -68,4 +68,4 @@ const readVisualBundle = () => {
   };
 };
 
-module.exports = { readVisualBundle };
+module.exports = { readVisualBundle, hashBundle };
