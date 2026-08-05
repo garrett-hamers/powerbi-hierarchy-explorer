@@ -143,12 +143,25 @@ Screenshot bytes are deliberately **not** asserted to be reproducible, because
 font rasterisation differs between machines - and, measurably, between two runs
 on one machine: re-capturing on the machine that produced the committed files
 reproduced `01-hierarchy-overview.png` byte for byte but left 6 to 15 of the
-1,049,088 pixels in the other two differing by a single channel value. A pixel
+1,049,088 pixels in the other two differing by a single channel value. Across
+machines the gap is far wider: the same commit rendered on the Linux CI runner
+produces PNGs roughly 45% larger (89,197 / 99,328 / 98,497 bytes against
+60,772 / 61,010 / 73,723 locally) purely from a different font stack. A pixel
 diff of the kind the brand assets use, which are drawn by a pure-Node
-rasteriser, would therefore fail here for reasons unrelated to correctness. What
-is enforced instead is the capture-time content above, plus exact dimensions,
-the 1024 KB ceiling, PNG structure, and that the image is not a flat
-placeholder.
+rasteriser with no browser or font dependency, would therefore fail here for
+reasons unrelated to correctness.
+
+The content assertions are unaffected by any of that. On the same commit the
+Linux runner measured exactly what Windows did - 15 cards and 14 connectors
+across 5 levels, the tree pane open at 251px with 8 rows and 3 collapsed
+branches, 3 search matches and 2 diagnostics - and repeated it exactly on a
+second run whose PNG byte counts had already moved again. They count structure
+and measure layout that is driven by explicit pixel geometry rather than by
+glyph metrics, which is why they can be a CI gate and image comparison cannot.
+
+What is enforced is therefore the capture-time content above, plus exact
+dimensions, the 1024 KB ceiling, PNG structure, and that the image is not a
+flat placeholder.
 
 `npm run verify-screenshots` applies the same gate without writing any image,
 and CI runs it on every push so a regression in the visual is caught even when
