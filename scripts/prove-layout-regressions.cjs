@@ -89,7 +89,9 @@ const FIXES = [
     revert: [
       {
         file: "src/visual.ts",
-        from: '    this.root.dataset.density = width > 0 && height > 0 ? resolveDensity(width, height) : "comfortable";',
+        from:
+          "    this.root.dataset.density =\n" +
+          '      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";',
         to: '    this.root.dataset.density = "comfortable";'
       }
     ],
@@ -103,7 +105,9 @@ const FIXES = [
     revert: [
       {
         file: "src/visual.ts",
-        from: '    this.root.dataset.density = width > 0 && height > 0 ? resolveDensity(width, height) : "comfortable";',
+        from:
+          "    this.root.dataset.density =\n" +
+          '      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";',
         to: '    this.root.dataset.density = "comfortable";'
       }
     ],
@@ -138,6 +142,36 @@ const FIXES = [
       }
     ],
     expect: { rule: "collapsed-region", minEscape: 20, tiles: ["80x80"], states: ["tree-focused"] }
+  },
+  {
+    id: "density-counts-the-diagnostics-strip",
+    summary:
+      "Density was resolved against the raw tile height, so a diagnostics message - which only the " +
+      "drawing area pays for, because only the drawing area can shrink - left the toolbar, the strip " +
+      "and a focused tree pane all at full size while the chart collapsed to nothing",
+    revert: [
+      {
+        file: "src/visual.ts",
+        from: "  const available = height - (diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0);",
+        to: "  const available = height;"
+      }
+    ],
+    expect: { rule: "chrome-outlives-chart", minEscape: 2, states: ["diagnostics", "diagnostics-tree-focused"] }
+  },
+  {
+    id: "diagnostics-cap-yields-to-the-chart",
+    summary:
+      "At compact density the diagnostics strip held its full 86px while the chart fell below the " +
+      "height at which it shows anything at all - and the strip scrolls, so capping it costs a reader " +
+      "nothing they cannot scroll back",
+    revert: [
+      {
+        file: "style/visual.less",
+        from: '.atlyn-root[data-density="compact"] .atlyn-diagnostics {\n  max-height: 64px;\n}',
+        to: '.atlyn-root[data-density="compact"] .atlyn-diagnostics {\n  max-height: 86px;\n}'
+      }
+    ],
+    expect: { rule: "chrome-outlives-chart", minEscape: 2, tiles: ["398x298"], states: ["diagnostics-tree-focused"] }
   },
   {
     id: "screen-reader-region-stays-inside",
@@ -178,29 +212,48 @@ const buildPackage = () => {
   run(process.execPath, [path.join("scripts", "normalize-package.cjs")]);
 };
 
+const detectNewline = (contents) => (contents.includes("\r\n") ? "\r\n" : "\n");
+const toLf = (contents) => contents.replace(/\r\n/g, "\n");
+
+/*
+ * Patches are written with \n, but a Windows checkout hands back CRLF for any
+ * file .gitattributes has not pinned to LF. Matching is done on a normalised
+ * copy and the file is written back in its own newline style, so a proof does
+ * not quietly stop matching depending on which machine ran it - the kind of
+ * silent evaporation this script exists to catch.
+ */
 const applyRevert = (fix) => {
   const originals = new Map();
-  fix.revert.forEach((patch) => {
-    const filePath = path.join(root, patch.file);
-    const before = fs.readFileSync(filePath, "utf8");
-    if (!originals.has(filePath)) {
-      originals.set(filePath, before);
-    }
-    const occurrences = before.split(patch.from).length - 1;
-    if (occurrences !== 1) {
-      throw new Error(
-        `${fix.id}: expected exactly one occurrence of the fixed source in ${patch.file}, found ${occurrences}. ` +
-          "The fix has moved, so this proof is no longer proving anything - update scripts/prove-layout-regressions.cjs."
-      );
-    }
-    fs.writeFileSync(filePath, before.replace(patch.from, patch.to));
-  });
+  try {
+    fix.revert.forEach((patch) => {
+      const filePath = path.join(root, patch.file);
+      const before = fs.readFileSync(filePath, "utf8");
+      if (!originals.has(filePath)) {
+        originals.set(filePath, before);
+      }
+      const newline = detectNewline(before);
+      const normalized = toLf(before);
+      const from = toLf(patch.from);
+      const occurrences = normalized.split(from).length - 1;
+      if (occurrences !== 1) {
+        throw new Error(
+          `${fix.id}: expected exactly one occurrence of the fixed source in ${patch.file}, found ${occurrences}. ` +
+            "The fix has moved, so this proof is no longer proving anything - update scripts/prove-layout-regressions.cjs."
+        );
+      }
+      const patched = normalized.replace(from, toLf(patch.to));
+      fs.writeFileSync(filePath, newline === "\r\n" ? patched.replace(/\n/g, "\r\n") : patched);
+    });
+  } catch (error) {
+    restore(originals);
+    throw error;
+  }
   return originals;
 };
 
-const restore = (originals) => {
+function restore(originals) {
   originals.forEach((contents, filePath) => fs.writeFileSync(filePath, contents));
-};
+}
 
 const matches = (fix, caseResult, violation) => {
   if (violation.rule !== fix.expect.rule) {

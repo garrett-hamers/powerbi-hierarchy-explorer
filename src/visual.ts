@@ -72,11 +72,30 @@ const COMPACT_MAX_WIDTH = 320;
 const MINIMAL_MAX_HEIGHT = 140;
 const MINIMAL_MAX_WIDTH = 200;
 
-function resolveDensity(width: number, height: number): Density {
-  if (height < MINIMAL_MAX_HEIGHT || width < MINIMAL_MAX_WIDTH) {
+/*
+ * What the diagnostics strip costs when it is showing. It is capped at 86px by
+ * the stylesheet and reaches that cap on any dataset with more than a couple of
+ * quality problems, so this is the height it takes out of the tile rather than
+ * an estimate of it.
+ */
+const DIAGNOSTICS_STRIP_HEIGHT = 86;
+
+/*
+ * Density is resolved against the height that is actually left for the chart,
+ * not the raw tile height. Only .atlyn-canvas-wrap can shrink, so any strip
+ * that appears is paid for entirely by the drawing area: with a diagnostics
+ * message present, a 398x298 tile has as little room for the chart as a
+ * 398x212 tile has without one, and it should degrade its chrome accordingly.
+ * Sizing the chrome by the tile alone is what lets the toolbar, the diagnostics
+ * strip and a focused tree pane all survive at full size while the chart they
+ * surround collapses to nothing.
+ */
+function resolveDensity(width: number, height: number, diagnosticsShown = false): Density {
+  const available = height - (diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0);
+  if (available < MINIMAL_MAX_HEIGHT || width < MINIMAL_MAX_WIDTH) {
     return "minimal";
   }
-  if (height < COMPACT_MAX_HEIGHT || width < COMPACT_MAX_WIDTH) {
+  if (available < COMPACT_MAX_HEIGHT || width < COMPACT_MAX_WIDTH) {
     return "compact";
   }
   return "comfortable";
@@ -891,7 +910,10 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
       this.lastUpdateOptions?.viewport?.width ?? this.canvasWrap.clientWidth ?? 320
     );
     const height = Math.max(150, this.lastUpdateOptions?.viewport?.height ?? 280);
-    this.applyDensity();
+    const renderCapped = visibleIds.length > renderIds.length;
+    const diagnosticsShown =
+      this.formatting.showDiagnostics && (this.graph.diagnostics.length > 0 || renderCapped);
+    this.applyDensity(diagnosticsShown);
     const layout = computeLayout(this.graph, visibleIds, {
       width,
       height,
@@ -913,7 +935,7 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     this.renderEdges(layout, renderIds);
     renderIds.forEach((id) => this.renderSvgNode(id, layout));
     this.renderSemanticTree(renderIds);
-    this.renderDiagnostics(visibleIds.length > renderIds.length);
+    this.renderDiagnostics(renderCapped);
     this.renderBreadcrumb();
     this.renderStatus(visibleIds.length, renderIds.length);
     const activeId = this.focusedId && this.graph.nodes.has(this.focusedId) ? this.focusedId : renderIds[0];
@@ -939,10 +961,11 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
    * rather than pushed past the clipped edge where it silently disappears and
    * takes the canvas with it.
    */
-  private applyDensity(): void {
+  private applyDensity(diagnosticsShown: boolean): void {
     const width = this.lastUpdateOptions?.viewport?.width ?? this.root.clientWidth;
     const height = this.lastUpdateOptions?.viewport?.height ?? this.root.clientHeight;
-    this.root.dataset.density = width > 0 && height > 0 ? resolveDensity(width, height) : "comfortable";
+    this.root.dataset.density =
+      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";
   }
 
   private renderEdges(layout: LayoutResult, visibleIds: readonly string[]): void {    const visible = new Set(visibleIds);

@@ -12,10 +12,10 @@ is bumped to keep the version-to-bytes mapping honest.
 
 - Keep every drawn element inside the host tile. A Power BI tile clips at its own
   edge with no scrollbar and no affordance, and a probe of the packaged bundle in
-  real Chromium (`npm run probe-layout`, 140 cases across five tile sizes, seven
-  expansion and direction states, and four scroll offsets each) found 2,424
-  escaping measurements across 132 of those 140 cases, on 15 distinct kinds of
-  element. Fixed:
+  real Chromium (`npm run probe-layout`, 180 cases across five tile sizes, nine
+  expansion, direction and data-quality states, and four scroll offsets each)
+  found 2,772 escaping measurements across 168 of those 180 cases, on 15 distinct
+  kinds of element. Fixed:
   - In `ar-SA` every node label and subtitle was drawn outside its own card, by
     up to 140.85px, at every tile size. `text-anchor` resolves against the inline
     direction, so under `direction: rtl` "start" already means the right-hand
@@ -26,6 +26,20 @@ is bumped to keep the version-to-bytes mapping honest.
   - A `min-height: 96px` floor on the root made the visual 96px tall inside an
     80x80 tile, so the host ate 15.5px of it. The floor is gone: the tile is the
     authority on how much room there is.
+  - The chart degraded before the chrome. Only `.atlyn-canvas-wrap` carried
+    `min-height: 0`, so it was the sole region that could shrink and it paid for
+    every other strip. With a data-quality message present the diagnostics strip
+    held exactly 86px at every tile size including 80x80, the toolbar held 40px
+    and *grew* to 153px as the tile narrowed and it wrapped, and a focused tree
+    pane took another 38% - while the chart rendered at **0px at 398x298, 258x198,
+    178x138 and 80x80**. The visual still looked populated, which is what made it
+    dangerous. Density is now resolved against the height actually left for the
+    chart rather than the raw tile height, and the diagnostics strip - which
+    scrolls, so capping it costs a reader nothing they cannot scroll back - yields
+    its cap before the chart yields its existence. Below the point where a message
+    cannot be shown at all, diagnostics degrade to screen-reader-only rather than
+    squeezing the chart out. The priority is now explicit: degrade chrome, never
+    data.
   - Every chrome strip was `flex: 0 0 auto`, so on a small tile the toolbar,
     status strip and breadcrumb between them exceeded the tile height and pushed
     each other past the clipped edge - the breadcrumb by 285.5px at 80x80 - while

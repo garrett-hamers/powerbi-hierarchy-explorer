@@ -292,6 +292,47 @@ describe("focus and hidden scrolling", () => {
   });
 });
 
+describe("which region loses when the tile runs short", () => {
+  const chrome = [
+    { path: "div.atlyn-toolbar", label: "toolbar", height: 94 },
+    { path: "div.atlyn-diagnostics", label: "diagnostics", height: 86 },
+    { path: "div.atlyn-semantic-tree", label: "accessible tree", height: 113 }
+  ];
+
+  test("catches chrome surviving at full size while the chart collapses", () => {
+    const found = rules.checkChromeOutlivesChart({
+      chart: { path: "div.atlyn-canvas-wrap", height: 0 },
+      minimumChartHeight: 24,
+      chrome
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0].rule).toBe(rules.RULES.chromeOutlivesChart);
+    expect(found[0].keptByChrome).toBe(293);
+    expect(found[0].detail).toContain("degrade chrome, never data");
+    expect(found[0].detail).toContain("diagnostics 86.0px");
+  });
+
+  test("says nothing while the chart still has its room", () => {
+    expect(
+      rules.checkChromeOutlivesChart({
+        chart: { path: "div.atlyn-canvas-wrap", height: 43 },
+        minimumChartHeight: 24,
+        chrome
+      })
+    ).toEqual([]);
+  });
+
+  test("does not blame chrome for a tile with nothing in it at all", () => {
+    expect(
+      rules.checkChromeOutlivesChart({
+        chart: { path: "div.atlyn-canvas-wrap", height: 0 },
+        minimumChartHeight: 24,
+        chrome: [{ path: "div.atlyn-toolbar", label: "toolbar", height: 0 }]
+      })
+    ).toEqual([]);
+  });
+});
+
 describe("declared counts", () => {
   test("catches a visual that has grown its first sticky element", () => {
     const found = rules.checkDeclaredCounts({ sticky: 1, fixed: 0 }, { sticky: 0, fixed: 0 });

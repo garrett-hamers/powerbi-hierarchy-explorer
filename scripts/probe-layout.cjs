@@ -69,7 +69,22 @@ const STATES = [
   { id: "tree-focused", label: "accessible tree focused", fixture: "org", locale: "en-US", collapse: [], focusTree: true },
   { id: "long-labels", label: "long labels", fixture: "longLabels", locale: "en-US", collapse: [] },
   { id: "rtl", label: "RTL (ar-SA)", fixture: "arabicLabels", locale: "ar-SA", collapse: [] },
-  { id: "rtl-latin", label: "RTL (ar-SA) with Latin labels", fixture: "org", locale: "ar-SA", collapse: [] }
+  { id: "rtl-latin", label: "RTL (ar-SA) with Latin labels", fixture: "org", locale: "ar-SA", collapse: [] },
+  /*
+   * The diagnostics strip is display:none until the data has something wrong
+   * with it, so a probe fed clean data never lays it out at all. These two
+   * states are where the chrome and the chart compete for a short tile: every
+   * strip present at once, and then the accessible tree pane on top of them.
+   */
+  { id: "diagnostics", label: "diagnostics present", fixture: "diagnostics", locale: "en-US", collapse: [] },
+  {
+    id: "diagnostics-tree-focused",
+    label: "diagnostics present, accessible tree focused",
+    fixture: "diagnostics",
+    locale: "en-US",
+    collapse: [],
+    focusTree: true
+  }
 ];
 
 /*
@@ -168,8 +183,10 @@ const readPackagedBundle = async () => {
   };
 };
 
-const evaluateCase = (measurement, context) => {
-  const violations = [];
+/* Everything in the flex column that is not the drawing area. */
+const CHROME_LABELS = ["toolbar", "status strip", "breadcrumb", "diagnostics", "accessible tree"];
+
+const evaluateCase = (measurement, context) => {  const violations = [];
   const canvas = measurement.regions.find((region) => region.label === "drawing canvas");
   const expectedForDensity = expectations.byDensity[measurement.density];
   if (!expectedForDensity) {
@@ -218,6 +235,15 @@ const evaluateCase = (measurement, context) => {
           minHeight: expectations.minimumSizes.canvasHeight
         }
       ])
+    );
+    violations.push(
+      ...rules.checkChromeOutlivesChart({
+        chart: { path: canvas.path, height: canvas.clientHeight },
+        minimumChartHeight: expectations.minimumSizes.canvasHeight,
+        chrome: measurement.regions
+          .filter((region) => CHROME_LABELS.includes(region.label))
+          .map((region) => ({ path: region.path, label: region.label, height: region.height }))
+      })
     );
   }
   return violations.map((item) => Object.assign({}, item, context));
@@ -388,6 +414,37 @@ const main = async () => {
     );
   });
   process.stdout.write("\n");
+
+  /*
+   * The four numbers the chrome-versus-chart question turns on, reported
+   * whether or not any rule fired. A table of measurements is the answer to
+   * "does the chart survive"; a pass/fail is not.
+   */
+  const heightOf = (result, label) => {
+    const region = result.measurement.regions.find((item) => item.label === label);
+    return region ? region.height : null;
+  };
+  const format = (value) => (value === null ? "   -" : value.toFixed(0).padStart(4));
+  const chromeCases = results.filter(
+    (result) => result.offset === "natural" && result.state.startsWith("diagnostics")
+  );
+  if (chromeCases.length > 0) {
+    process.stdout.write("Chrome versus chart, with diagnostics present (rendered heights, px):\n");
+    process.stdout.write("  tile      state                       canvas  tree toolbar diags  root.scrollTop\n");
+    chromeCases.forEach((result) => {
+      const canvas = result.measurement.regions.find((item) => item.label === "drawing canvas");
+      const rootScroll = (result.measurement.hiddenScrollRegions || []).find((item) =>
+        item.path.endsWith("div.atlyn-root")
+      );
+      process.stdout.write(
+        `  ${result.tile.padEnd(9)} ${result.state.padEnd(26)} ` +
+          `${format(canvas ? canvas.clientHeight : null)}  ${format(heightOf(result, "accessible tree"))} ` +
+          `${format(heightOf(result, "toolbar"))}  ${format(heightOf(result, "diagnostics"))}  ` +
+          `${rootScroll ? rootScroll.scrollTop.toFixed(0) : "n/a"}\n`
+      );
+    });
+    process.stdout.write("\n");
+  }
 
   if (failingCases.length > 0) {
     process.stdout.write("Violations:\n");

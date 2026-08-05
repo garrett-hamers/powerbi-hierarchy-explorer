@@ -67,6 +67,25 @@
     };
   };
 
+  /*
+   * Data that makes the visual talk. Every row here trips a different quality
+   * check - empty id, empty label, duplicate id, conflicting duplicate,
+   * self-cycle, long cycle, orphan - so the diagnostics strip renders at its
+   * full height instead of staying hidden. Without this the diagnostics strip
+   * is display:none and a probe never sees the state where it competes with the
+   * chart for a short tile.
+   */
+  var DIAGNOSTIC_ROWS = ORG.concat([
+    ["", null, "Row with no identifier", "Excluded", "Row", 0, 0],
+    ["blank-label", "ops", "", "No label supplied", "Team", 100, 1],
+    ["na", "ops", "North America", "Duplicate of an earlier row", "Region", 21400000, 512],
+    ["emea", "apac", "Europe & Middle East (conflicting)", "Conflicting duplicate", "Region", 999, 9],
+    ["loop", "loop", "Self referencing node", "Self cycle", "Team", 500, 5],
+    ["cycle-a", "cycle-b", "Cycle member A", "Long cycle", "Team", 600, 6],
+    ["cycle-b", "cycle-a", "Cycle member B", "Long cycle", "Team", 700, 7],
+    ["orphan", "no-such-parent", "Orphaned division", "Parent not in the data", "Division", 3100000, 87]
+  ]);
+
   window.__probeFixtures = {
     org: function () {
       return dataView(ORG);
@@ -76,6 +95,9 @@
     },
     arabicLabels: function () {
       return dataView(arabicLabels);
+    },
+    diagnostics: function () {
+      return dataView(DIAGNOSTIC_ROWS);
     },
     // Every node that has children, deepest first, so a caller can collapse the
     // whole tree by walking the list.

@@ -115,12 +115,25 @@ packaged `.pbiviz` in headless Chromium and measures every element's
 `getBoundingClientRect()` against the box that actually clips it, ignoring
 anything a user could reach by scrolling a genuine `overflow: auto` ancestor.
 
-It probes five host tile sizes (1280x620 down to 80x80), seven states (fully
+It probes five host tile sizes (1280x620 down to 80x80), nine states (fully
 expanded, partially expanded, fully collapsed, accessible tree focused, long
-labels, and `ar-SA` with both Arabic and Latin labels) and four scroll offsets
-per state - the offset the browser itself chose, then every scrollable region
-forced to its top, middle and maximum, with the whole escape walk re-run at
-each. 140 cases in all.
+labels, `ar-SA` with both Arabic and Latin labels, and diagnostics present both
+with and without the accessible tree focused) and four scroll offsets per state
+- the offset the browser itself chose, then every scrollable region forced to
+its top, middle and maximum, with the whole escape walk re-run at each. 180
+cases in all.
+
+The diagnostics states matter more than their count suggests. The diagnostics
+strip is `display: none` until the data has something wrong with it, and the
+accessible tree is a 1px clipped region until focus pulls it into the flow, so a
+probe fed clean data and never given a focus event never lays either of them out
+- and never sees the state where the chrome and the chart compete for a short
+tile. The bug lives in the state you did not put the visual into.
+
+Every run reports rendered heights for the canvas, the tree, the toolbar and the
+diagnostics strip, plus `root.scrollTop`, at each tile with diagnostics present,
+whether or not any rule fired. "Does the chart survive" is answered by a table of
+measurements, not by a pass.
 
 The rules are pure functions in `scripts/layout-probe/rules.cjs`, so
 `tests/layout-rules.test.ts` can drive them with deliberately bad measurements

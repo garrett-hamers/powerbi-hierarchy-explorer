@@ -29,6 +29,7 @@ const RULES = {
   stickyOverlap: "sticky-overlap",
   hiddenScroll: "hidden-scroll",
   focusNotFullyVisible: "focus-not-fully-visible",
+  chromeOutlivesChart: "chrome-outlives-chart",
   textEscapesOwner: "text-escapes-owner",
   countDrifted: "count-drifted"
 };
@@ -449,6 +450,49 @@ function checkHiddenScroll(regions, tolerance = DEFAULT_TOLERANCE) {
 }
 
 /**
+ * Which region loses when the tile runs short.
+ *
+ * A flex column where only the drawing area carries min-height: 0 has made a
+ * priority decision by accident: the drawing area is the sole item that can
+ * shrink, so it absorbs every shortfall while the toolbar, the diagnostics
+ * strip and a focused tree pane hold their full size. The visual then still
+ * looks populated - chrome everywhere - while the thing the report author put
+ * on the page has collapsed to nothing.
+ *
+ * This is deliberately separate from collapsedRegion. That rule says the chart
+ * is too small; this one says what was kept instead, which is the part that
+ * makes it a decision rather than an accident.
+ */
+function checkChromeOutlivesChart(measurement, tolerance = DEFAULT_TOLERANCE) {
+  const chart = measurement.chart;
+  if (!chart) {
+    return [];
+  }
+  const minimum = finite(measurement.minimumChartHeight, "minimumChartHeight");
+  const height = finite(chart.height, "chart.height");
+  if (height + tolerance >= minimum) {
+    return [];
+  }
+  const survivors = (measurement.chrome || []).filter((region) => finite(region.height, "chrome.height") > tolerance);
+  if (survivors.length === 0) {
+    return [];
+  }
+  const kept = survivors.reduce((total, region) => total + region.height, 0);
+  return [
+    violation(
+      RULES.chromeOutlivesChart,
+      chart.path,
+      `the chart is ${height.toFixed(1)}px tall, below the ${minimum}px it needs, while ` +
+        `${survivors.length} chrome ${survivors.length === 1 ? "region holds" : "regions hold"} ` +
+        `${kept.toFixed(1)}px between them (${survivors
+          .map((region) => `${region.label || region.path} ${region.height.toFixed(1)}px`)
+          .join(", ")}). Chrome outliving the chart inverts the priority: degrade chrome, never data.`,
+      { escape: minimum - height, keptByChrome: kept }
+    )
+  ];
+}
+
+/**
  * Counts that must not drift without someone deciding they should. A visual
  * that grows its first position:sticky element, or its first position:fixed
  * one, has grown a whole class of behaviour this probe would otherwise walk
@@ -501,6 +545,7 @@ module.exports = {
   checkFocusWithinTile,
   checkFocusFullyVisible,
   checkHiddenScroll,
+  checkChromeOutlivesChart,
   checkDeclaredCounts,
   summarize
 };
