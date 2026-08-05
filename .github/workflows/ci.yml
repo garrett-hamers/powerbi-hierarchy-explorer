@@ -108,7 +108,13 @@ jobs:
           npm install --no-save --no-audit --no-fund playwright
           npx playwright install --with-deps chromium
       - name: Build the visual
-        run: npx pbiviz package
+        # Package and normalize, but stop short of the publication gate. This
+        # produces the exact bytes a release ships - normalization is what makes
+        # the artifact reproducible - while leaving screenshot staleness to the
+        # job that owns it, so a failure here always means a layout failure.
+        run: |
+          npx pbiviz package
+          node scripts/normalize-package.cjs
       - name: Probe the packaged visual for escaping content
         run: npm run probe-layout
       - name: Upload the layout probe report
