@@ -190,6 +190,7 @@ const evaluateCase = (measurement, context) => {
    */
   if (context.offset === "natural") {
     violations.push(...rules.checkFocusWithinTile(measurement.focus, measurement.tile));
+    violations.push(...rules.checkFocusFullyVisible(measurement.focus));
   }
   violations.push(
     ...rules.checkScrollRegions(measurement.scrollRegions, {
@@ -353,6 +354,17 @@ const main = async () => {
   );
 
   const failingCases = results.filter((result) => result.violations.length > 0);
+  const worstFill = results.reduce(
+    (worst, result) =>
+      (result.measurement.textFit?.worstFill ?? 0) > worst.fill
+        ? { fill: result.measurement.textFit.worstFill, path: result.measurement.textFit.worstFillPath }
+        : worst,
+    { fill: 0, path: null }
+  );
+  process.stdout.write(
+    `Widest label fills ${(worstFill.fill * 100).toFixed(1)}% of the space its card reserves ` +
+      `(${worstFill.path ?? "no labels drawn"}); the remainder is the headroom a wider font stack has.\n`
+  );
   process.stdout.write(`Cases: ${results.length}, failing: ${failingCases.length}\n\n`);
 
   const byTile = new Map();

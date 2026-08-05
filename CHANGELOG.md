@@ -10,9 +10,51 @@ the `1.0.0.0` artifact previously published to storefront Blob storage: the
 metadata and stylesheet changes below alter the packaged bytes, so the version
 is bumped to keep the version-to-bytes mapping honest.
 
+- Keep every drawn element inside the host tile. A Power BI tile clips at its own
+  edge with no scrollbar and no affordance, and a probe of the packaged bundle in
+  real Chromium (`npm run probe-layout`, 140 cases across five tile sizes, seven
+  expansion and direction states, and four scroll offsets each) found 2,424
+  escaping measurements across 132 of those 140 cases, on 15 distinct kinds of
+  element. Fixed:
+  - In `ar-SA` every node label and subtitle was drawn outside its own card, by
+    up to 140.85px, at every tile size. `text-anchor` resolves against the inline
+    direction, so under `direction: rtl` "start" already means the right-hand
+    edge; the layout mirrors each x coordinate and the renderer flipped the
+    anchor as well, and the second flip drew each label back out of its card and
+    past the SVG that clips it. The anchor is now `start` in both directions and
+    the single mirror in `computeLayout` does the whole job.
+  - A `min-height: 96px` floor on the root made the visual 96px tall inside an
+    80x80 tile, so the host ate 15.5px of it. The floor is gone: the tile is the
+    authority on how much room there is.
+  - Every chrome strip was `flex: 0 0 auto`, so on a small tile the toolbar,
+    status strip and breadcrumb between them exceeded the tile height and pushed
+    each other past the clipped edge - the breadcrumb by 285.5px at 80x80 - while
+    the drawing canvas, the only item that could shrink, absorbed the whole
+    shortfall and rendered at 0px at three of the five probed tile sizes. The
+    visual now publishes the host viewport as a density and drops the chrome that
+    does not fit rather than overflowing with it. Strips that carry information a
+    screen reader needs, including the `aria-live` status strip, become
+    screen-reader-only instead of being removed.
+  - Long labels were drawn at full length into a card whose width is clamped, so
+    they ran 18.05px past the card and past the SVG's scrollable extent, where no
+    scroll offset reaches them. Drawn text is now trimmed to its card using the
+    same glyph estimate the card was sized with, so anything that fits is never
+    trimmed. The widest label now fills 79.2% of the space its card reserves,
+    which is the headroom left for a wider font stack.
+  - The focused accessible tree pane had no height floor, so at an 80x80 tile it
+    was shorter than the 32px row it was showing and the keyboard user's own row
+    could not be brought fully into view at any scroll offset.
+  - The screen-reader-only tree carried `margin: -1px` from the visually-hidden
+    idiom, which on an absolutely positioned box anchors the region a pixel
+    outside the visual's own tile.
+
+  Every one of these is proven by removal: `npm run prove-layout-regressions`
+  puts each defect back, rebuilds the `.pbiviz`, re-runs the probe and requires
+  the matching rule to go red, and fails on any fix whose removal leaves the
+  probe green.
+
 - Harden table contracts, segmented data accumulation, deterministic tidy-tree
-  layout, bounded rendering, and accessible interaction state.
-- Align Power BI packaging and linting gates with the certification-safe
+  layout, bounded rendering, and accessible interaction state.- Align Power BI packaging and linting gates with the certification-safe
   repository contract.
 - Add a deterministic Partner Center publication logo asset contract
   (`assets/partner-center-logo.png`), include its metadata in release manifests,

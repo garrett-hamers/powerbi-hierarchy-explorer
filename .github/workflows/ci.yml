@@ -79,3 +79,42 @@ jobs:
         run: npx pbiviz package
       - name: Verify the screenshot scenes still render
         run: npm run verify-screenshots
+
+  # Loads the packaged .pbiviz in headless Chromium and measures every element
+  # against the box that actually clips it, across five host tile sizes, seven
+  # expansion/direction states and four scroll offsets. A Power BI tile clips at
+  # its own edge with no scrollbar, so content laid out beyond it is discarded
+  # in silence - this job is what makes that noise.
+  #
+  # It shares the screenshot job's reason for being separate: Playwright is
+  # installed here and nowhere else, so it stays off the dependency surface the
+  # validate job audits. If no Chromium can be launched the probe throws, because
+  # a run that measured nothing must not report success.
+  layout-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Build the visual
+        run: npx pbiviz package
+      - name: Probe the packaged visual for escaping content
+        run: npm run probe-layout
+      - name: Upload the layout probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layout-probe-report
+          path: .tmp/layout-probe/report.json
+          if-no-files-found: warn

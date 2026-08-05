@@ -251,6 +251,29 @@ describe("focus and hidden scrolling", () => {
     expect(rules.checkFocusWithinTile({ activePath: null, activeRect: null }, TILE)).toEqual([]);
   });
 
+  test("catches a focused row taller than the pane showing it", () => {
+    const found = rules.checkFocusFullyVisible({
+      activePath: "div.atlyn-semantic-item",
+      activeRect: box(0, 250, 80, 36),
+      visibleBox: box(0, 256, 80, 30),
+      visibleBoxPath: "div.atlyn-semantic-tree"
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0].rule).toBe(rules.RULES.focusNotFullyVisible);
+    expect(found[0].detail).toContain("no scroll offset shows the focused row whole");
+  });
+
+  test("passes a focused row the pane can show whole", () => {
+    expect(
+      rules.checkFocusFullyVisible({
+        activePath: "div.atlyn-semantic-item",
+        activeRect: box(0, 260, 80, 25),
+        visibleBox: box(0, 256, 80, 42),
+        visibleBoxPath: "div.atlyn-semantic-tree"
+      })
+    ).toEqual([]);
+  });
+
   test("catches an overflow:hidden box that has been scrolled where no user can scroll it back", () => {
     const found = rules.checkHiddenScroll([
       { path: "div.atlyn-root", overflowX: "hidden", overflowY: "hidden", scrollTop: 81.5, scrollLeft: 0 }

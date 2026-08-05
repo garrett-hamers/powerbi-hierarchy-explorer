@@ -281,6 +281,26 @@
     return moved;
   };
 
+  /*
+   * The box that actually clips the element: the padding box of its nearest
+   * clipping ancestor, whether that ancestor scrolls or not. For a focused row
+   * this is the pane it lives in, and a row that does not fit inside it cannot
+   * be shown whole at any scroll offset.
+   */
+  function clippingBoxOf(element) {
+    var tile = tileElement();
+    var ancestor = element && element.parentElement;
+    while (ancestor && ancestor !== tile) {
+      var style = getComputedStyle(ancestor);
+      if (isClipper(ancestor, style)) {
+        return { rect: paddingBoxOf(ancestor, style), path: pathOf(ancestor) };
+      }
+      ancestor = ancestor.parentElement;
+    }
+    var tileStyle = getComputedStyle(tile);
+    return { rect: paddingBoxOf(tile, tileStyle), path: "#tile" };
+  }
+
   window.__probeMeasure = function measure() {
     var tile = tileElement();
     var tileStyle = getComputedStyle(tile);
@@ -411,6 +431,28 @@
     var canvas = tile.querySelector(".atlyn-canvas-wrap");
     var rootStyle = getComputedStyle(root);
 
+    // How close the widest drawn label comes to filling the space its card
+    // reserves. The card is sized from an estimated glyph advance, so this is
+    // the headroom the estimate has left for a font stack with wider metrics -
+    // a Linux CI runner without Arial, for instance. Near 1.0 means the next
+    // font substitution overflows.
+    var worstFill = 0;
+    var worstFillPath = null;
+    textPairs.forEach(function (pair) {
+      var available = pair.ownerRect.width - 16;
+      if (available <= 0 || pair.textRect.width <= 0) {
+        return;
+      }
+      var ratio = pair.textRect.width / available;
+      if (ratio > worstFill) {
+        worstFill = ratio;
+        worstFillPath = pair.path;
+      }
+    });
+
+    var active = document.activeElement && tile.contains(document.activeElement) ? document.activeElement : null;
+    var activeClip = active ? clippingBoxOf(active) : null;
+
     return {
       tile: tileClip,
       root: rectOf(root),
@@ -436,6 +478,7 @@
       hiddenScrollRegions: hiddenScrollRegions,
       screenReaderRegions: screenReaderRegions,
       textPairs: textPairs,
+      textFit: { worstFill: worstFill, worstFillPath: worstFillPath },
       regions: [
         namedRegion(root, "visual root"),
         namedRegion(tile.querySelector(".atlyn-toolbar"), "toolbar"),
@@ -447,11 +490,11 @@
         namedRegion(tile.querySelector(".atlyn-diagnostics"), "diagnostics")
       ].filter(Boolean),
       focus: {
-        activePath: document.activeElement ? pathOf(document.activeElement) : null,
-        activeRect: document.activeElement ? rectOf(document.activeElement) : null,
-        insideTree: Boolean(
-          document.activeElement && document.activeElement.closest && document.activeElement.closest('[role="tree"]')
-        )
+        activePath: active ? pathOf(active) : null,
+        activeRect: active ? rectOf(active) : null,
+        visibleBox: activeClip ? activeClip.rect : null,
+        visibleBoxPath: activeClip ? activeClip.path : null,
+        insideTree: Boolean(active && active.closest && active.closest('[role="tree"]'))
       }
     };
   };

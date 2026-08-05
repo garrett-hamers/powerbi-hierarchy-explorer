@@ -207,19 +207,18 @@
 }
 
 /*
- * When the tree takes focus it rejoins the flow as a pane. It shrinks rather
- * than holding its height, because it is a scroll container: shrinking it costs
- * nothing a user cannot scroll back, while refusing to shrink pushes the canvas
- * and the toolbar past the clipped edge of .atlyn-root, where nothing can bring
- * them back - .atlyn-root has overflow: hidden, so the browser's own
- * scroll-into-view is the only thing that can move it and the user cannot undo
- * that scroll.
+ * When the tree takes focus it rejoins the flow as a pane. It does not shrink:
+ * flex: 0 1 auto here would let the canvas's own enormous content basis pull
+ * shrinkage onto the tree at ordinary tile sizes, and the tree would render
+ * shorter than the rows it is showing on a 1366x768 report page. What keeps the
+ * pane and the canvas from fighting at small tiles is density, which drops the
+ * toolbar while the tree holds focus, and the floor below.
  */
 .atlyn-semantic-tree:focus-within {
   border-top: 1px solid var(--atlyn-border);
   clip: auto;
   clip-path: none;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   height: auto;
   margin: 0;
   max-height: 38%;

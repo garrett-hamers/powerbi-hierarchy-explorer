@@ -105,3 +105,47 @@ npm run verify-reproducible-package
 npm run certification-audit
 npm audit
 ```
+
+## Layout probe
+
+A Power BI host renders a visual inside a tile with `overflow: hidden`. Content
+laid out beyond that tile is not scrolled to and not scrollbarred - it is
+discarded, and nothing on screen says so. `npm run probe-layout` loads the
+packaged `.pbiviz` in headless Chromium and measures every element's
+`getBoundingClientRect()` against the box that actually clips it, ignoring
+anything a user could reach by scrolling a genuine `overflow: auto` ancestor.
+
+It probes five host tile sizes (1280x620 down to 80x80), seven states (fully
+expanded, partially expanded, fully collapsed, accessible tree focused, long
+labels, and `ar-SA` with both Arabic and Latin labels) and four scroll offsets
+per state - the offset the browser itself chose, then every scrollable region
+forced to its top, middle and maximum, with the whole escape walk re-run at
+each. 140 cases in all.
+
+The rules are pure functions in `scripts/layout-probe/rules.cjs`, so
+`tests/layout-rules.test.ts` can drive them with deliberately bad measurements
+rather than only ever showing them a correct render. Nothing about geometry is
+asserted in JSDOM, which has no layout engine and would return zeros.
+
+`npm run prove-layout-regressions` puts each fixed defect back into the source
+one at a time, rebuilds the package, re-runs the probe, and requires the
+matching rule to fire with at least the escape the defect originally measured.
+A fix whose removal leaves the probe green is reported as unproven and fails the
+run.
+
+Both need Playwright, which is deliberately not a dependency of this package so
+it stays off the surface `npm audit` and the certification gates inspect:
+
+```text
+npm install --no-save playwright
+npx playwright install chromium
+npm run package
+npm run probe-layout
+npm run prove-layout-regressions
+```
+
+`scripts/layout-probe/expected-regions.json` records what the probe expects to
+find - which regions scroll at which density, and that the visual contains no
+`position: sticky` or `position: fixed` element. A region that stops being a
+scroll container is reported rather than quietly dropped, because a dropped
+region silently stops carrying its own requirement.

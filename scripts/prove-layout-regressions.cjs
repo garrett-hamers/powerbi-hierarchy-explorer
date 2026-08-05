@@ -113,7 +113,8 @@ const FIXES = [
     id: "tree-pane-fits-a-row",
     summary:
       "The focused tree pane took 38% of the tile with no floor, so at an 80x80 tile it was " +
-      "shorter than the row it was showing and the keyboard user's own row was cut off",
+      "shorter than the 32px row it was showing and the keyboard user's own row could not be " +
+      "brought fully into view at any scroll offset",
     revert: [
       {
         file: "style/visual.less",
@@ -121,13 +122,13 @@ const FIXES = [
         to: "  min-height: 0;\n  overflow: auto;\n  padding: 4px 8px;\n  position: relative;"
       }
     ],
-    expect: { rule: "clipped-escape", minEscape: 5, tiles: ["80x80"], states: ["tree-focused"] }
+    expect: { rule: "focus-not-fully-visible", minEscape: 1, tiles: ["80x80"], states: ["tree-focused"] }
   },
   {
     id: "minimal-yields-the-toolbar-to-the-tree",
     summary:
       "At an 80x80 tile the toolbar and a focused tree pane do not both fit; keeping both " +
-      "overflowed the root, and focusing a row then scrolled an overflow: hidden box the user cannot scroll back",
+      "left no room at all for the drawing canvas, so the visual sat on the report showing nothing",
     revert: [
       {
         file: "style/visual.less",
@@ -136,7 +137,7 @@ const FIXES = [
         to: '.atlyn-root[data-density="minimal"][data-tree-focused="never"] .atlyn-toolbar {\n  display: none;\n}'
       }
     ],
-    expect: { rule: "hidden-scroll", minEscape: 1, tiles: ["80x80"], states: ["tree-focused"] }
+    expect: { rule: "collapsed-region", minEscape: 20, tiles: ["80x80"], states: ["tree-focused"] }
   },
   {
     id: "screen-reader-region-stays-inside",
@@ -158,7 +159,13 @@ const run = (command, args) => {
   execFileSync(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
 };
 
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+/*
+ * The CLI is invoked through node against its own entry point rather than
+ * through npx: Node refuses to spawn a .cmd shim without a shell on Windows,
+ * and running it through a shell would make this script's behaviour depend on
+ * which shell happened to be there.
+ */
+const pbivizEntry = path.join(root, "node_modules", "powerbi-visuals-tools", "bin", "pbiviz.js");
 
 /*
  * Only the steps that produce the artifact. The full `npm run package` also
@@ -167,7 +174,7 @@ const npx = process.platform === "win32" ? "npx.cmd" : "npx";
  */
 const buildPackage = () => {
   run(process.execPath, [path.join("scripts", "clean-package-artifacts.cjs")]);
-  run(npx, ["--no-install", "pbiviz", "package"]);
+  run(process.execPath, [pbivizEntry, "package"]);
   run(process.execPath, [path.join("scripts", "normalize-package.cjs")]);
 };
 

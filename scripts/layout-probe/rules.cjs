@@ -28,6 +28,7 @@ const RULES = {
   stickyNotPositioned: "sticky-not-positioned",
   stickyOverlap: "sticky-overlap",
   hiddenScroll: "hidden-scroll",
+  focusNotFullyVisible: "focus-not-fully-visible",
   textEscapesOwner: "text-escapes-owner",
   countDrifted: "count-drifted"
 };
@@ -394,6 +395,33 @@ function checkFocusWithinTile(focus, tile, tolerance = DEFAULT_TOLERANCE) {
 }
 
 /**
+ * Reachable is not the same as visible. A row inside a scroll pane shorter than
+ * the row itself can never be shown whole: the browser scrolls one edge of it
+ * into view and the other edge stays cut off, whichever way it aligns. Checked
+ * only at the offset the browser itself chose after focus moved, because after
+ * the probe forces a scroll, a focused row being off screen is what scrolling
+ * means.
+ */
+function checkFocusFullyVisible(focus, tolerance = DEFAULT_TOLERANCE) {
+  if (!focus || !focus.activeRect || !focus.activePath || !focus.visibleBox) {
+    return [];
+  }
+  const escape = escapeOf(focus.activeRect, focus.visibleBox, tolerance);
+  if (escape.worst === 0) {
+    return [];
+  }
+  return [
+    violation(
+      RULES.focusNotFullyVisible,
+      focus.activePath,
+      `holds keyboard focus but does not fit inside ${focus.visibleBoxPath || "the box that clips it"} ` +
+        `(${edgeSummary(escape)}), so no scroll offset shows the focused row whole`,
+      { escape: escape.worst, escapeEdges: escape }
+    )
+  ];
+}
+
+/**
  * An overflow: hidden box is still scrollable programmatically - focusing a
  * descendant makes the browser scroll it into view - but a user cannot scroll
  * it back, because there is no scrollbar and no gesture that reaches it. So a
@@ -471,6 +499,7 @@ module.exports = {
   checkStickyStacking,
   checkTextWithinOwner,
   checkFocusWithinTile,
+  checkFocusFullyVisible,
   checkHiddenScroll,
   checkDeclaredCounts,
   summarize

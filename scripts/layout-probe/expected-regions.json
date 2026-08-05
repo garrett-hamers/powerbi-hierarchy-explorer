@@ -2,6 +2,14 @@
   "note": "What the layout probe expects to find. Anything in here that stops being true is reported as a failure rather than quietly dropped, because a region that silently stops being a scroll container silently stops carrying its own requirement.",
   "densityNote": "Expectations are per density because the visual deliberately changes shape with the tile. At minimal density the diagnostics strip is reduced to a screen-reader-only region and is no longer a scroll container - that is a decision, recorded here, rather than a check that quietly evaporated.",
   "byDensity": {
+    "(unset)": {
+      "unsetNote": "A build that publishes no density at all - anything from before the density mechanism existed. Kept so the probe can still measure an older artifact for a before-and-after comparison rather than refusing to run on it.",
+      "scrollRegions": [
+        "div.atlyn-root > div.atlyn-canvas-wrap",
+        "div.atlyn-root > div.atlyn-diagnostics"
+      ],
+      "mustOverflow": ["div.atlyn-root > div.atlyn-canvas-wrap"]
+    },
     "comfortable": {
       "scrollRegions": [
         "div.atlyn-root > div.atlyn-canvas-wrap",
