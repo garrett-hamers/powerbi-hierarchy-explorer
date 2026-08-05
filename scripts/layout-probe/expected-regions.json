@@ -29,6 +29,18 @@
       "mustOverflow": ["div.atlyn-root > div.atlyn-canvas-wrap"]
     }
   },
+  "statesNote": "The states the suite must probe. Pinned for the same reason the sticky count is: a state that disappears takes its findings with it and leaves a smaller run that still reports zero violations. diagnostics-tree-focused is the one worth naming - it is where a diagnostics message and a focused tree pane compete, and where the chart went from 0px visible to 185px.",
+  "states": [
+    "expanded",
+    "partial",
+    "collapsed",
+    "tree-focused",
+    "long-labels",
+    "rtl",
+    "rtl-latin",
+    "diagnostics",
+    "diagnostics-tree-focused"
+  ],
   "countsNote": "Zero sticky and zero fixed elements. This visual pins nothing, so the sticky rules currently have nothing to run on - which is exactly why the count is pinned here. The day a sticky header appears this file fails, and the sticky checks get wired up before the header ships.",
   "counts": {
     "sticky": 0,
