@@ -1,4 +1,4 @@
-/// Offline sample hierarchy for the AppSource sample report. It is a DAX calculated table built with DATATABLE, so the model has no data source at all: nothing can prompt for credentials and there is no refresh dependency. The organisation is invented for the listing and matches the dataset used for the store screenshots.
+/// Offline sample hierarchy for the AppSource sample report. It is a DAX calculated table built with DATATABLE, so the model declares no data source at all and there is nothing for Power BI to authenticate against. The organisation is invented for the listing and matches the dataset used for the store screenshots.
 table Hierarchy
 	lineageTag: 90b92473-c5b7-ee3d-52ed-94c5f7c21448
 
