@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 
 const root = path.resolve(__dirname, "..");
 
@@ -59,6 +60,9 @@ describe("certification-first package contract", () => {
       "node scripts/validate-publication-assets.cjs"
     );
     expect(packageJson.scripts.screenshots).toBe("node scripts/capture-submission-screenshots.cjs");
+    expect(packageJson.scripts["verify-screenshots"]).toBe(
+      "node scripts/capture-submission-screenshots.cjs --verify"
+    );
     expect(packageJson.scripts["brand-assets"]).toBe("node scripts/build-brand-assets.cjs");
     expect(packageJson.scripts["sample-report"]).toBe("node scripts/build-sample-report.cjs");
     expect(packageJson.scripts["release-manifest"]).toBe("node scripts/write-release-manifest.cjs");
@@ -73,8 +77,9 @@ describe("certification-first package contract", () => {
     // hono reaches the tree through powerbi-visuals-tools -> @modelcontextprotocol/sdk.
     // 4.12.34 is the smallest version that fixes GHSA-8j4g-w8fx-2239.
     expect(packageJson.overrides.hono).toBe("4.12.34");
-    // Rendering the screenshots needs a browser, which CI never does. Keeping
-    // Playwright out of the manifest keeps it off the `npm audit` surface.
+    // Rendering needs a browser, so Playwright is installed only in the job
+    // that renders and never recorded in the manifest. That keeps it off the
+    // dependency surface `npm audit` and `npm ci` see.
     expect(packageJson.devDependencies).not.toHaveProperty("playwright");
     expect(packageJson.dependencies).not.toHaveProperty("playwright");
     expect(pbiviz.visual.version).toBe(`${packageJson.version}.0`);
@@ -220,6 +225,52 @@ describe("certification-first package contract", () => {
     // The sample report's embedded copy of the package is compared byte for
     // byte, so it must never be converted at all.
     expect(gitattributes).toContain("samples/**/CustomVisuals/** -text");
+  });
+
+  test("every screenshot scene declares what it must contain before it can be captured", () => {
+    // The harness scenarios are plain page scripts, so running the file here
+    // exercises the same definitions the capture drives. Nothing in this test
+    // measures geometry - jsdom has no layout - it only holds the rule that a
+    // scene without expectations cannot be photographed.
+    const sandbox: { window: { ATLYN_SCENARIOS?: Record<string, unknown>[] } } = { window: {} };
+    vm.createContext(sandbox);
+    vm.runInContext(
+      fs.readFileSync(path.join(root, "scripts", "screenshot-harness", "data.js"), "utf8"),
+      sandbox
+    );
+    const scenarios = sandbox.window.ATLYN_SCENARIOS ?? [];
+
+    expect(scenarios.map((scenario) => scenario.id)).toEqual([
+      "01-hierarchy-overview",
+      "02-expand-collapse",
+      "03-search-diagnostics"
+    ]);
+    for (const scenario of scenarios) {
+      expect(typeof scenario.assert).toBe("function");
+      expect(String(scenario.caption).length).toBeGreaterThan(40);
+    }
+
+    // Distinct expectations, not one shared check: each scene demonstrates a
+    // different thing, so identical bodies would verify none of them.
+    const bodies = scenarios.map((scenario) => String(scenario.assert));
+    expect(new Set(bodies).size).toBe(scenarios.length);
+
+    const capture = fs.readFileSync(
+      path.join(root, "scripts", "capture-submission-screenshots.cjs"),
+      "utf8"
+    );
+    // The gate runs before the shutter, and a failing scene takes its stale
+    // image with it.
+    expect(capture.indexOf("__atlynAssertScene")).toBeLessThan(capture.indexOf("page.screenshot"));
+    expect(capture).toContain("discardScreenshot");
+  });
+
+  test("CI verifies the screenshot scenes without publishing images", () => {
+    const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "ci.yml"), "utf8");
+    expect(workflow).toContain("npm run verify-screenshots");
+    // Image bytes are not reproducible between runs, so CI must never compare
+    // them; it re-renders and applies the scenes' own expectations instead.
+    expect(workflow).not.toContain("npm run screenshots\n");
   });
 
   test("does not use network, unsafe DOM, unsupported highlights, or undocumented context menus", () => {

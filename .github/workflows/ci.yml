@@ -49,3 +49,33 @@ jobs:
         run: npm run certification-audit
       - name: Full dependency audit
         run: npm audit
+
+  # Renders the three submission scenes and applies each scene's own content
+  # expectations. It never compares image bytes - those are not reproducible
+  # even between two runs on one machine - and it never writes into
+  # assets/screenshots. What it proves is that the current source still draws
+  # the scenes the committed screenshots claim to show.
+  #
+  # Kept in its own job so Playwright, which is installed here and nowhere else,
+  # stays off the dependency surface the validate job audits.
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Build the visual
+        run: npx pbiviz package
+      - name: Verify the screenshot scenes still render
+        run: npm run verify-screenshots

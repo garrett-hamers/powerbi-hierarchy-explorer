@@ -1,11 +1,18 @@
 /*
- * Offline datasets for the AppSource submission screenshots.
+ * Offline datasets and per-scene content expectations for the AppSource
+ * submission screenshots.
  *
  * Every row is literal, inline data - the harness makes no network or data
  * source connection of any kind. The company and team names are invented for
  * the listing. Subtitle carries the formatted measure so revenue and headcount
  * are legible on the node cards; the Value and Tooltips roles are bound to the
  * real underlying numbers as a report author would bind them.
+ *
+ * Each scenario also carries an `assert` function. It runs against the measured
+ * page a frame before the shutter opens, and the capture refuses to write the
+ * PNG unless it passes. The expectations are per scene on purpose: each of the
+ * three demonstrates something different, and a check general enough to cover
+ * all three would confirm none of them.
  */
 (function () {
   "use strict";
@@ -58,7 +65,70 @@
       caption:
         "Five levels of an explicit parent-child table, laid out so every parent sits over its children. Revenue and headcount stay on the card.",
       dataView: dataView(ORG.concat(PODS)),
-      input: {}
+      input: {},
+      /*
+       * What this screenshot claims: every row in the table above reached the
+       * canvas, joined to its parent, across the five levels the caption
+       * promises, with the measure text on each card.
+       *
+       * Counts come from the data: 15 rows, 14 of them with a parent, and a
+       * deepest path of ops > na > na-ent > na-ne > na-ne-ren. Depth runs across
+       * the canvas, so five levels means five distinct card columns.
+       */
+      assert: function (probe, fail) {
+        var graph = probe.graph;
+        if (graph.cards !== 15) {
+          fail("expected all 15 rows on the canvas, found " + graph.cards + " node cards");
+        }
+        if (graph.edges !== 14) {
+          fail(
+            "expected 14 parent-child connectors, found " +
+              graph.edges +
+              "; the hierarchy is not joined up, so the layout claim is not shown"
+          );
+        }
+        if (graph.depthColumns !== 5) {
+          fail(
+            "expected the five levels the caption promises, found " +
+              graph.depthColumns +
+              " distinct card columns"
+          );
+        }
+        if (graph.labels !== 15 || graph.subtitles !== 15) {
+          fail(
+            "expected a label and a measure subtitle on all 15 cards, found " +
+              graph.labels +
+              " labels and " +
+              graph.subtitles +
+              " subtitles"
+          );
+        }
+        if (graph.blankLabels.length > 0) {
+          fail("node labels laid out to nothing: " + graph.blankLabels.join(", "));
+        }
+        if (graph.undersizedCards.length > 0) {
+          fail("node cards rendered with no visible size: " + graph.undersizedCards.join(", "));
+        }
+        if (graph.offscreenCards.length > 0) {
+          fail(
+            "node cards fall outside the canvas the screenshot shows: " + graph.offscreenCards.join(", ")
+          );
+        }
+        if (probe.tree.onScreen) {
+          fail("the accessible tree pane is open; this scene is the canvas overview, not the tree");
+        }
+        if (probe.diagnostics.lines !== 0) {
+          fail(
+            "this scene binds well-formed data but the visual reported " +
+              probe.diagnostics.lines +
+              " diagnostics: " +
+              probe.diagnostics.texts.join(" | ")
+          );
+        }
+        if (!/(^|\D)15 visible(\D|$)/.test(probe.status)) {
+          fail('the status strip does not report 15 visible nodes: "' + probe.status + '"');
+        }
+      }
     },
     {
       id: "02-expand-collapse",
@@ -83,6 +153,76 @@
           "ArrowLeft", // collapse na-ent
           "ArrowUp" //    settle on na-com
         ]
+      },
+      /*
+       * What this screenshot claims: the tree pane is genuinely open and
+       * readable, three named branches are collapsed while others stay open,
+       * and the breadcrumb tracks the focused row.
+       *
+       * The height floor is the assertion that matters most here. The pane is a
+       * 1px clipped region until focus pulls it into the flow, so it is present
+       * in the DOM, with all its rows, for the entire time it is invisible. Only
+       * a measured height separates the open pane from the collapsed one.
+       */
+      assert: function (probe, fail) {
+        var tree = probe.tree;
+        if (!tree.onScreen) {
+          fail("the accessible tree never opened, so the scene shows the canvas rather than the tree");
+        }
+        if (tree.height < 80) {
+          fail(
+            "the tree pane rendered " +
+              tree.height +
+              "px tall; below 80px it is not legibly open in the screenshot"
+          );
+        }
+        if (!tree.withinVisual) {
+          fail("the tree pane is not fully inside the visual's box, so part of it is cut off");
+        }
+        if (tree.flatRows.length > 0) {
+          fail("tree rows present in the DOM but rendered with no height: " + tree.flatRows.join(", "));
+        }
+        if (tree.offscreenRows.length > 0) {
+          fail("tree rows fall outside the visible pane: " + tree.offscreenRows.join(", "));
+        }
+
+        var collapsed = tree.collapsedRows.slice().sort().join(", ");
+        if (collapsed !== "apac, eu-ent, na-ent") {
+          fail(
+            "expected the branches apac, eu-ent, na-ent to be collapsed, found [" +
+              collapsed +
+              "]; the tree is not in the partially expanded state the scene demonstrates"
+          );
+        }
+        if (tree.expandedRows.length === 0) {
+          fail("every branch is collapsed, so the screenshot shows no expanded state to contrast against");
+        }
+        if (tree.rows !== 8) {
+          fail(
+            "expected 8 visible rows once three branches are collapsed, found " +
+              tree.rows +
+              " of the 15 nodes bound"
+          );
+        }
+        if (probe.graph.cards !== tree.rows) {
+          fail(
+            "the canvas shows " +
+              probe.graph.cards +
+              " cards but the tree shows " +
+              tree.rows +
+              " rows; the collapse did not reach the canvas"
+          );
+        }
+
+        if (tree.focusedRow !== "na-com") {
+          fail("expected focus to settle on na-com, found " + (tree.focusedRow || "no focused row"));
+        }
+        if (!tree.focusedRowOnScreen) {
+          fail("the focused row is scrolled out of the visible pane, so the screenshot does not show it");
+        }
+        if (probe.breadcrumb.indexOf("Meridian Worldwide / North America / Commercial Sales") === -1) {
+          fail('the breadcrumb did not follow focus into the hierarchy: "' + probe.breadcrumb + '"');
+        }
       }
     },
     {
@@ -90,7 +230,79 @@
       caption:
         "Search highlights every matching node in place, and malformed rows are reported rather than dropped - here a division whose parent is missing from the table.",
       dataView: dataView(ORG.concat(ORPHAN)),
-      input: { type: { selector: ".atlyn-search", text: "enterprise" } }
+      input: { type: { selector: ".atlyn-search", text: "enterprise" } },
+      /*
+       * What this screenshot claims: the typed term reached the visual's own
+       * search box, all three Enterprise Sales divisions are highlighted where
+       * they sit, and the orphaned row is reported in a legible diagnostics
+       * strip instead of being dropped.
+       *
+       * A tree that renders perfectly proves none of that, so every assertion
+       * below is about the search result or the diagnostic output.
+       */
+      assert: function (probe, fail) {
+        var search = probe.search;
+        if (search.value !== "enterprise") {
+          fail('the search box holds "' + search.value + '" rather than "enterprise"');
+        }
+        if (search.matches !== 3) {
+          fail(
+            "expected the three Enterprise Sales divisions to be highlighted, found " +
+              search.matches +
+              " highlighted cards"
+          );
+        }
+        if (search.undersizedMatches.length > 0) {
+          fail("highlighted cards rendered with no visible size: " + search.undersizedMatches.join(", "));
+        }
+        if (search.offscreenMatches.length > 0) {
+          fail(
+            "highlighted cards fall outside the canvas the screenshot shows: " +
+              search.offscreenMatches.join(", ")
+          );
+        }
+
+        var diagnostics = probe.diagnostics;
+        if (diagnostics.hidden || diagnostics.lines === 0) {
+          fail("no diagnostics were reported, so the malformed row this scene exists to show is invisible");
+        }
+        if (diagnostics.height < 12) {
+          fail(
+            "the diagnostics strip rendered " + diagnostics.height + "px tall, too short to read in the screenshot"
+          );
+        }
+        if (!diagnostics.withinVisual) {
+          fail("the diagnostics strip is not fully inside the visual's box, so part of it is cut off");
+        }
+        if (diagnostics.unreadableLines > 0) {
+          fail(diagnostics.unreadableLines + " diagnostic lines rendered blank or with no height");
+        }
+        var reportsOrphan = diagnostics.texts.some(function (text) {
+          return text.indexOf("ap-com") !== -1;
+        });
+        if (!reportsOrphan) {
+          fail(
+            "no diagnostic names the orphaned row ap-com: " +
+              (diagnostics.texts.join(" | ") || "(no diagnostic text)")
+          );
+        }
+
+        if (probe.graph.cards !== 14) {
+          fail(
+            "expected all 14 rows on the canvas including the orphan, found " + probe.graph.cards + " node cards"
+          );
+        }
+        if (probe.graph.edges !== 12) {
+          fail(
+            "expected 12 connectors for a two-root forest, found " +
+              probe.graph.edges +
+              "; the orphan is not being rendered as a disconnected root"
+          );
+        }
+        if (probe.tree.onScreen) {
+          fail("the accessible tree pane is open; this scene shows the canvas and the diagnostics strip");
+        }
+      }
     }
   ];
 })();
