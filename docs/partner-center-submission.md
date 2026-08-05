@@ -113,10 +113,90 @@ The harness lives in `scripts/screenshot-harness/` and the data is inlined in
 `scripts/screenshot-harness/data.js`. The company and team names are invented
 for the listing.
 
-Screenshot bytes are deliberately **not** asserted to be reproducible, because
-font rasterisation differs between machines. What is enforced is exact
-dimensions, the 1024 KB ceiling, PNG structure, and that the image is not a flat
-placeholder.
+### What is verified at capture time
+
+Each scenario declares its own expectations next to its data, and the capture
+evaluates them against the live page immediately before the shutter opens. A
+scene that fails is not photographed at all, its committed image is deleted so
+a stale render cannot pass for a current one, and nothing is published until
+every scene has passed.
+
+| Scene | Must be true before the PNG is written |
+| --- | --- |
+| `01-hierarchy-overview` | All 15 rows on the canvas, 14 parent-child connectors, five distinct levels, a label and a measure subtitle on every card, no diagnostics, and "15 visible" in the status strip. |
+| `02-expand-collapse` | The accessible tree pane genuinely open and at least 80px tall, exactly `apac`, `eu-ent` and `na-ent` collapsed with other branches still expanded, 8 of the 15 nodes visible, the canvas agreeing with the tree, focus settled on `na-com` and on screen, and the breadcrumb following it. |
+| `03-search-diagnostics` | "enterprise" in the visual's own search box, all three Enterprise Sales cards highlighted, a legible diagnostics strip naming the orphan `ap-com`, and 14 cards with 12 connectors for the two-root forest. |
+
+The expectations are per scene on purpose. Each screenshot demonstrates
+something different, so one check general enough to cover all three would
+confirm none of them: a tree that renders perfectly is no evidence that search
+highlighted anything.
+
+Presence in the DOM is not treated as evidence of a render. Node cards, search
+highlights, tree rows and the diagnostics strip are measured, and each must have
+non-zero rendered size and lie inside the box the screenshot actually shows. The
+failure this guards against is an element that exists in the markup for the whole
+time it is broken while laying out at zero height, which `querySelector` finds
+every time.
+
+### How a committed screenshot stays checkable
+
+Those assertions run in a browser, pass, print, and are gone. On their own they
+prove a PNG was right at the instant it was written; a screenshot edited,
+reverted or swapped afterwards is still a valid 1366x768 PNG under the byte cap
+and would satisfy every other gate here.
+
+`assets/screenshot-capture.json` closes that. Capture writes it alongside the
+images: for each scene, the measurements it was accepted on - element counts and
+geometry, not a bare pass or fail - and the SHA-256 of the bytes published for
+it.
+
+| Asserted where | What it checks |
+| --- | --- |
+| `npm run screenshots` | The scene renders what it claims, before the PNG is written |
+| `npm run validate-publication-assets` | Every committed PNG still hashes to what capture recorded, and every recorded scene is still committed |
+| `npm test` | The same hash comparison, so it holds without a browser or a package build |
+| `npm run verify-package` | The release manifest carries the capture evidence and agrees with it |
+| `npm run verify-screenshots` (CI) | The current source still renders what the record describes |
+
+This is a hash comparison against the bytes capture published. It is **not** a
+golden image and must not become one: renders are not bit-stable, so a
+re-render comparison would fail for reasons unrelated to correctness.
+
+Screenshot bytes are deliberately **not** asserted to be reproducible against a
+re-render, because font rasterisation differs between machines - and,
+measurably, between two runs on one machine. Re-capturing on the machine that
+produced the committed files reproduced two of the three byte for byte and left
+6 to 15 of the 1,049,088 pixels in the third differing by a single channel
+value; a later run reproduced a different two and returned an
+`02-expand-collapse.png` of *identical byte length* but a different hash. Across
+machines the gap is far wider: the same commit rendered on the Linux CI runner
+produces PNGs roughly 45% larger (89,197 / 99,328 / 98,497 bytes against
+60,772 / 61,010 / 73,723 locally) purely from a different font stack. A pixel
+diff of the kind the brand assets use, which are drawn by a pure-Node
+rasteriser with no browser or font dependency, would therefore fail here for
+reasons unrelated to correctness.
+
+That is exactly why `assets/screenshot-capture.json` pins the hash of the bytes
+that were *committed* rather than expecting a later render to reproduce them.
+The comparison is against the file in the repository, never against a fresh
+capture.
+
+The content assertions are unaffected by any of that. On the same commit the
+Linux runner measured exactly what Windows did - 15 cards and 14 connectors
+across 5 levels, the tree pane open at 251px with 8 rows and 3 collapsed
+branches, 3 search matches and 2 diagnostics - and repeated it exactly on a
+second run whose PNG byte counts had already moved again. They count structure
+and measure layout that is driven by explicit pixel geometry rather than by
+glyph metrics, which is why they can be a CI gate and image comparison cannot.
+
+What is enforced is therefore the capture-time content above, the recorded hash
+of each committed image, exact dimensions, the 1024 KB ceiling, PNG structure,
+and that the image is not a flat placeholder.
+
+`npm run verify-screenshots` applies the same gate without writing any image,
+and CI runs it on every push so a regression in the visual is caught even when
+nobody re-captures.
 
 ## 3. Sample report
 
@@ -333,6 +413,14 @@ npx playwright install chromium
 npm run package
 npm run screenshots
 ```
+
+That is a second, independent gate. `validate-publication-assets` inspects
+committed files and so can only judge structure; nothing static about a PNG
+separates a correct render from a wrong but plausible one. The capture is the
+only place where what the image was *supposed* to show is still known, so the
+per-scene expectations live there - see "What is verified at capture time" in
+section 2. CI runs them as `npm run verify-screenshots`, which renders and
+asserts but writes no image.
 
 ## 6. Remaining manual steps (owner only)
 

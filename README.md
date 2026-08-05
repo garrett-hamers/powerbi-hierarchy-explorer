@@ -51,7 +51,14 @@ validated on every build by `npm run validate-publication-assets`:
   `.pbiviz` as `content.iconBase64`; the listing logo is not.
 - `assets/screenshots/*.png` - three 1366x768 PNGs, each under 1024 KB. They are
   real renders of the packaged bundle driven by native browser input, not
-  mock-ups; see `scripts/screenshot-harness/`.
+  mock-ups; see `scripts/screenshot-harness/`. Each scene declares what it must
+  contain - counts, interaction state and measured geometry - and the capture
+  refuses to write a PNG whose scene did not actually render.
+- `assets/screenshot-capture.json` - what each scene was measured at when its
+  PNG was written, and the SHA-256 of the bytes written for it. The scene
+  assertions are otherwise ephemeral, so this is what lets a later build
+  re-check that the committed file is still the one they were applied to;
+  `npm run validate-publication-assets` and `npm test` both assert it.
 - `EULA.md` - end user licence, granting the same permissive MIT terms as
   `LICENSE`.
 - `samples/AtlynHierarchyExplorerSample.pbip` - the offline sample report, as a
@@ -64,7 +71,7 @@ validated on every build by `npm run validate-publication-assets`:
   value, plus the manual steps that remain.
 
 Regenerating the screenshots needs a browser, which is deliberately not a
-dependency of this package so CI neither installs nor audits it:
+dependency of this package so `npm ci` neither installs nor audits it:
 
 ```text
 npm install --no-save playwright
@@ -72,6 +79,19 @@ npx playwright install chromium
 npm run package
 npm run screenshots
 ```
+
+Every scene is asserted against the live page before its screenshot is taken:
+node and connector counts, the interaction state the caption claims, and
+measured geometry - content must have real size and lie inside the box the
+image shows. A scene that fails is not photographed, and its committed image is
+deleted rather than left to pass for a current render. The measurements each
+scene was accepted on, and the SHA-256 of the bytes published for it, are
+written to `assets/screenshot-capture.json`, and every build re-checks the
+committed PNGs against it - otherwise the assertions would prove only that a
+file was right at the moment it was written. `npm run verify-screenshots` runs
+the same gate without writing anything, which is what CI does; image bytes are
+never compared against a re-render, because they are not reproducible even
+between two runs on one machine.
 
 ## Development
 

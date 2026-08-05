@@ -11,7 +11,8 @@
  *   - the visualization pane icon is a real 20x20 PNG, and is the file
  *     pbiviz.json actually packages
  *   - 1 to 5 screenshots exist, each a real PNG at exactly 1366x768 and at most
- *     1024 KB
+ *     1024 KB, and each still byte-identical to what the capture recorded
+ *     asserting it
  *   - the support and privacy policy URLs are https
  *   - an EULA file is present
  *
@@ -28,6 +29,7 @@ const LOGO = { path: "assets/partner-center-logo.png", width: 300, height: 300 }
 const ICON = { path: "assets/icon.png", width: 20, height: 20 };
 const SCREENSHOTS = {
   directory: "assets/screenshots",
+  record: "assets/screenshot-capture.json",
   width: 1366,
   height: 768,
   maxBytes: 1024 * 1024,
@@ -209,6 +211,85 @@ if (!fs.existsSync(screenshotDirectory)) {
   }
 }
 
+/*
+ * The capture record is what makes a screenshot re-checkable after the fact.
+ *
+ * The assertions that gate `npm run screenshots` are strong but ephemeral: they
+ * prove a scene rendered at the instant its PNG was written, print, and are
+ * gone. A screenshot edited, reverted or swapped afterwards satisfies every
+ * other check here - it is still a 1366x768 PNG under the byte cap - so without
+ * this comparison the repository would record an assertion it could never
+ * re-verify.
+ *
+ * This is a hash comparison against the bytes the capture published, not a
+ * re-render. It must never become one. Two captures of the same commit on the
+ * same machine differ by a handful of pixels at a single channel value, and the
+ * Linux runner produces PNGs some 45% larger from the same source, so a golden
+ * image or pixel diff would fail for reasons unrelated to correctness. What is
+ * asserted is only that the committed file is still the file the scene
+ * assertions were applied to.
+ */
+const captureRecordPath = path.join(root, SCREENSHOTS.record);
+let captureRecord = null;
+if (!fs.existsSync(captureRecordPath)) {
+  fail(
+    `${SCREENSHOTS.record} is required so the committed screenshots can be checked against the capture that asserted them; run "npm run screenshots"`
+  );
+} else {
+  try {
+    captureRecord = JSON.parse(fs.readFileSync(captureRecordPath, "utf8"));
+  } catch (error) {
+    fail(`${SCREENSHOTS.record} is not readable JSON: ${error.message}`);
+  }
+}
+
+if (captureRecord) {
+  const scenes = Array.isArray(captureRecord.scenes) ? captureRecord.scenes : [];
+  if (scenes.length === 0) {
+    fail(`${SCREENSHOTS.record} records no scenes`);
+  }
+  if (captureRecord.capturedWith?.viewport !== `${SCREENSHOTS.width}x${SCREENSHOTS.height}`) {
+    fail(
+      `${SCREENSHOTS.record} was captured at viewport ${captureRecord.capturedWith?.viewport}; the submission requires ${SCREENSHOTS.width}x${SCREENSHOTS.height}`
+    );
+  }
+  if (captureRecord.capturedWith?.visualVersion !== visual.version) {
+    fail(
+      `${SCREENSHOTS.record} was captured from version ${captureRecord.capturedWith?.visualVersion} but pbiviz.json declares ${visual.version}; re-capture so the listing shows what ships`
+    );
+  }
+
+  const committed = new Map(screenshots.map((screenshot) => [screenshot.path, screenshot]));
+  for (const scene of scenes) {
+    const screenshot = committed.get(scene.path);
+    if (!screenshot) {
+      fail(
+        `${SCREENSHOTS.record} records ${scene.id} at ${scene.path}, but that file is not committed; a scene whose capture failed leaves its image deleted on purpose`
+      );
+      continue;
+    }
+    committed.delete(scene.path);
+    if (screenshot.sha256 !== scene.sha256) {
+      fail(
+        `${scene.path} has changed since it was captured: recorded ${scene.sha256} (${scene.bytes} bytes), committed ${screenshot.sha256} (${screenshot.bytes} bytes). ` +
+          `Its content assertions no longer apply to these bytes; re-run "npm run screenshots".`
+      );
+    }
+    // Guards a record written from a degenerate render. The per-scene
+    // expectations live with the scenes in the harness and are not repeated
+    // here; this only refuses evidence that asserts nothing.
+    const asserted = scene.asserted ?? {};
+    if (!(asserted.cards > 0) || !(asserted.visual?.width > 0) || !(asserted.visual?.height > 0)) {
+      fail(
+        `${SCREENSHOTS.record} records no usable evidence for ${scene.id}: ${JSON.stringify(asserted)}`
+      );
+    }
+  }
+  for (const orphan of committed.keys()) {
+    fail(`${orphan} is committed but no scene in ${SCREENSHOTS.record} accounts for it`);
+  }
+}
+
 // --- EULA and submission dossier ----------------------------------------------
 
 requireText(EULA, "The AppSource EULA");
@@ -250,8 +331,13 @@ console.log(
     `${icon.distinctColors} distinct colours ${icon.sha256}`
 );
 for (const screenshot of screenshots) {
+  const scene = (captureRecord?.scenes ?? []).find((entry) => entry.path === screenshot.path);
   console.log(
-    `Validated ${screenshot.path} ${screenshot.width}x${screenshot.height} ${screenshot.bytes} bytes ${screenshot.sha256}`
+    `Validated ${screenshot.path} ${screenshot.width}x${screenshot.height} ${screenshot.bytes} bytes ${screenshot.sha256}` +
+      (scene
+        ? ` - unchanged since capture asserted ${scene.asserted.cards} cards, ${scene.asserted.edges} connectors, ` +
+          `${scene.asserted.search.matches} search matches, ${scene.asserted.diagnostics.lines} diagnostics`
+        : "")
   );
 }
 console.log(`Validated ${EULA}, ${DOSSIER}, support ${SUPPORT_URL}, privacy ${PRIVACY_POLICY_URL}`);

@@ -1,0 +1,151 @@
+{
+  "documentation": "Written by npm run screenshots. Each sha256 pins the committed bytes the assertions were applied to; it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison.",
+  "capturedWith": {
+    "visualGuid": "atlynHierarchyExplorer",
+    "visualVersion": "1.0.1.0",
+    "browser": "playwright-chromium",
+    "viewport": "1366x768"
+  },
+  "scenes": [
+    {
+      "id": "01-hierarchy-overview",
+      "path": "assets/screenshots/01-hierarchy-overview.png",
+      "bytes": 60772,
+      "sha256": "66D385E7FA45660AB56BD6389083B5ECD47F2FD4F0D7E684B05CF45F11A35299",
+      "asserted": {
+        "cards": 15,
+        "edges": 14,
+        "levels": 5,
+        "labels": 15,
+        "subtitles": 15,
+        "visual": {
+          "width": 1316,
+          "height": 667
+        },
+        "canvas": {
+          "width": 1316,
+          "height": 578
+        },
+        "tree": {
+          "onScreen": false,
+          "height": 1,
+          "rows": 15,
+          "expanded": [
+            "ops",
+            "apac",
+            "emea",
+            "eu-ent",
+            "na",
+            "na-ent",
+            "na-ne"
+          ],
+          "collapsed": [],
+          "focusedRow": null
+        },
+        "search": {
+          "value": "",
+          "matches": 0
+        },
+        "diagnostics": {
+          "lines": 0,
+          "height": 0
+        },
+        "status": "Table mode, 15 received, 15 visible, 0 excluded, 30,000-row bounded table contract active",
+        "breadcrumb": "Path: -"
+      }
+    },
+    {
+      "id": "02-expand-collapse",
+      "path": "assets/screenshots/02-expand-collapse.png",
+      "bytes": 61004,
+      "sha256": "8ADBF7BE35D9E2EE221A49EC26566086F6FFB976EDC7898C756F856E1A4B6A61",
+      "asserted": {
+        "cards": 8,
+        "edges": 7,
+        "levels": 3,
+        "labels": 8,
+        "subtitles": 8,
+        "visual": {
+          "width": 1316,
+          "height": 667
+        },
+        "canvas": {
+          "width": 1316,
+          "height": 327
+        },
+        "tree": {
+          "onScreen": true,
+          "height": 251,
+          "rows": 8,
+          "expanded": [
+            "ops",
+            "emea",
+            "na"
+          ],
+          "collapsed": [
+            "apac",
+            "eu-ent",
+            "na-ent"
+          ],
+          "focusedRow": "na-com"
+        },
+        "search": {
+          "value": "",
+          "matches": 0
+        },
+        "diagnostics": {
+          "lines": 0,
+          "height": 0
+        },
+        "status": "Table mode, 15 received, 8 visible, 0 excluded, 30,000-row bounded table contract active",
+        "breadcrumb": "Path: Meridian Worldwide / North America / Commercial Sales"
+      }
+    },
+    {
+      "id": "03-search-diagnostics",
+      "path": "assets/screenshots/03-search-diagnostics.png",
+      "bytes": 73719,
+      "sha256": "5301B8453B25F0260FE37EE9A71D232E15D01E6C459CAE88EF741433C74ACC72",
+      "asserted": {
+        "cards": 14,
+        "edges": 12,
+        "levels": 4,
+        "labels": 14,
+        "subtitles": 14,
+        "visual": {
+          "width": 1316,
+          "height": 667
+        },
+        "canvas": {
+          "width": 1316,
+          "height": 533
+        },
+        "tree": {
+          "onScreen": false,
+          "height": 1,
+          "rows": 14,
+          "expanded": [
+            "ops",
+            "apac",
+            "emea",
+            "eu-ent",
+            "na",
+            "na-ent"
+          ],
+          "collapsed": [],
+          "focusedRow": null
+        },
+        "search": {
+          "value": "enterprise",
+          "matches": 3
+        },
+        "diagnostics": {
+          "lines": 2,
+          "height": 45
+        },
+        "status": "Table mode, 14 received, 14 visible, 0 excluded, 30,000-row bounded table contract active",
+        "breadcrumb": "Path: Meridian Worldwide / Asia Pacific / Enterprise Sales"
+      }
+    }
+  ]
+}
