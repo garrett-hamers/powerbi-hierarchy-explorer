@@ -15,7 +15,7 @@
     "normalize-package": "node scripts/normalize-package.cjs",
     "verify-package": "node scripts/verify-package.cjs",
     "validate-publication-assets": "node scripts/validate-publication-assets.cjs",
-    "logo": "node scripts/build-partner-center-logo.cjs",
+    "brand-assets": "node scripts/build-brand-assets.cjs",
     "screenshots": "node scripts/capture-submission-screenshots.cjs",
     "sample-report": "node scripts/build-sample-report.cjs",
     "release-manifest": "node scripts/write-release-manifest.cjs",

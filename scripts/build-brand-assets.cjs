@@ -1,24 +1,29 @@
 /*
- * Renders assets/partner-center-logo.png - the 300x300 listing logo Partner
- * Center shows on the AppSource offer card.
+ * Renders both brand marks:
+ *   assets/partner-center-logo.png - the 300x300 listing logo on the AppSource
+ *                                    offer card
+ *   assets/icon.png                - the 20x20 icon Power BI shows in the
+ *                                    visualization pane, embedded in the
+ *                                    packaged .pbiviz as content.iconBase64
  *
- * The mark is a three level parent/child tree, which is the shape the visual
- * itself draws, on the same #2764C4 brand tile as the 20x20 assets/icon.png.
+ * Both are the same mark - a parent/child tree, which is the shape the visual
+ * itself draws, on the #2764C4 brand tile - drawn by one code path from the
+ * geometry below, so the listing and the visualization pane cannot drift apart.
  *
- * Everything is drawn here rather than exported from a design tool so the asset
- * is reproducible and reviewable: the geometry below is the source, and running
- * this script on any machine rewrites byte-identical output. It uses the Node
- * standard library only - no browser, no image library, nothing added to the
- * dependency tree that `npm audit` would then have to cover.
+ * Everything is drawn here rather than exported from a design tool so the assets
+ * are reproducible and reviewable: running this script on any machine rewrites
+ * byte-identical output. It uses the Node standard library only - no browser, no
+ * image library, nothing added to the dependency tree that `npm audit` would
+ * then have to cover.
  *
  * Shapes are analytic (rounded rectangles and round-capped capsules) and are
- * sampled on a SUPERSAMPLE x SUPERSAMPLE grid per output pixel, so every curved
- * and every diagonal edge lands on a real intermediate tone instead of the
- * stair-stepping a hard-edged two-colour image produces at this size. The PNG
- * encoder is the mirror image of the decoder in read-png-metadata.cjs, which is
- * also what verifies the result before this script reports success.
+ * sampled on a SUPERSAMPLE x SUPERSAMPLE grid per output pixel, so every curve
+ * lands on real intermediate tones instead of the stair-stepping a hard-edged
+ * two-colour image produces. The PNG encoder is the mirror image of the decoder
+ * in read-png-metadata.cjs, which is also what verifies the results before this
+ * script reports success.
  *
- *   npm run logo
+ *   npm run brand-assets
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -26,17 +31,14 @@ const zlib = require("node:zlib");
 const { readPngMetadata } = require("./read-png-metadata.cjs");
 
 const root = path.resolve(__dirname, "..");
-const targetPath = path.join(root, "assets", "partner-center-logo.png");
-const relativeTarget = "assets/partner-center-logo.png";
 
-const SIZE = 300;
 // 8x8 = 64 coverage samples per pixel. Enough tones for the eye to read the
-// rounded corners as smooth, and few enough that the palette stays in the same
-// band as the rest of the portfolio's artwork.
+// curves as smooth, and few enough that the palettes stay in the same band as
+// the rest of the portfolio's artwork.
 const SUPERSAMPLE = 8;
 
-// #2764C4 is the visual's own accent and the colour of the shipped 20x20 icon,
-// so the listing, the visualization pane and the rendered chart all agree.
+// #2764C4 is the visual's own accent, so the listing, the visualization pane and
+// the rendered chart all agree.
 const PALETTE = {
   page: "#FFFFFF",
   brand: "#2764C4",
@@ -44,19 +46,63 @@ const PALETTE = {
   leaf: "#C3D8F5"
 };
 
-// Geometry in logo pixels. Every row is centred on 150, and each parent sits at
-// the midpoint of its own children, so the tree stays symmetric.
-const TILE_RADIUS = 48;
-const ROOT = { centers: [150], centerY: 73, width: 106, height: 42, radius: 13 };
-const BRANCH = { centers: [86, 214], centerY: 151, width: 86, height: 38, radius: 11 };
-const LEAF = { centers: [56, 116, 184, 244], centerY: 228, width: 50, height: 40, radius: 10 };
-const BRANCH_BUS_Y = 113;
-const LEAF_BUS_Y = 189;
-const BRANCH_STROKE = 7;
-const LEAF_STROKE = 6;
+/*
+ * The two marks share a motif but not a coordinate system, because a 20x20 icon
+ * is not a 300x300 logo scaled by 1/15. Scaling down proportionally would give
+ * the icon 0.5px connectors and 2.8px nodes, which resolve to faint grey smears
+ * rather than shapes. Small canvases need relatively bolder strokes and fewer
+ * elements, so the icon carries the top two levels of the same tree - a root and
+ * its two children - at weights tuned for 20 pixels: a proportionally thicker
+ * connector, wider margins, and enough blue between the bus and the child nodes
+ * that they stay legible as separate shapes rather than merging into a blob.
+ *
+ * `levels` runs root first. `links` joins each level to the one below it with an
+ * elbow: a drop from the parent, a bus across its children, and a drop into each
+ * child. Children are split evenly between the parents above them.
+ */
+const ASSETS = [
+  {
+    name: "partnerCenterLogo",
+    relativePath: "assets/partner-center-logo.png",
+    size: 300,
+    tileRadius: 48,
+    levels: [
+      { centers: [150], centerY: 73, width: 106, height: 42, radius: 13, color: PALETTE.node },
+      { centers: [86, 214], centerY: 151, width: 86, height: 38, radius: 11, color: PALETTE.node },
+      {
+        centers: [56, 116, 184, 244],
+        centerY: 228,
+        width: 50,
+        height: 40,
+        radius: 10,
+        color: PALETTE.leaf
+      }
+    ],
+    links: [
+      { parent: 0, busY: 113, stroke: 7, color: PALETTE.node },
+      { parent: 1, busY: 189, stroke: 6, color: PALETTE.leaf }
+    ]
+  },
+  {
+    name: "icon",
+    relativePath: "assets/icon.png",
+    size: 20,
+    tileRadius: 3.2,
+    levels: [
+      { centers: [10], centerY: 4.5, width: 11, height: 4.2, radius: 1.4, color: PALETTE.node },
+      { centers: [5.2, 14.8], centerY: 14.7, width: 7.2, height: 4.6, radius: 1.4, color: PALETTE.node }
+    ],
+    links: [{ parent: 0, busY: 9.4, stroke: 1.4, color: PALETTE.node }]
+  }
+];
+
+// Floors the render must clear before it is written, so a change to the geometry
+// that flattened a mark could not quietly ship. They match the publication gate
+// in validate-publication-assets.cjs.
+const MIN_COLORS = { 300: 16, 20: 8 };
 
 const fail = (message) => {
-  process.stderr.write(`Partner Center logo generation failed: ${message}\n`);
+  process.stderr.write(`Brand asset generation failed: ${message}\n`);
   process.exit(1);
 };
 
@@ -172,15 +218,15 @@ class Surface {
   }
 }
 
-const drawRow = (surface, row, color) => {
-  for (const center of row.centers) {
+const drawLevel = (surface, level) => {
+  for (const center of level.centers) {
     surface.roundedRect(
-      center - row.width / 2,
-      row.centerY - row.height / 2,
-      row.width,
-      row.height,
-      row.radius,
-      color
+      center - level.width / 2,
+      level.centerY - level.height / 2,
+      level.width,
+      level.height,
+      level.radius,
+      level.color
     );
   }
 };
@@ -189,51 +235,43 @@ const drawRow = (surface, row, color) => {
  * Draws the elbow connectors from one parent down to the children beneath it:
  * a drop from the parent, a bus across the children, and a drop into each one.
  */
-const drawConnectors = (surface, parent, parentCenter, children, childTop, busY, strokeWidth, color) => {
-  const parentBottom = parent.centerY + parent.height / 2;
-  surface.capsule(parentCenter, parentBottom, parentCenter, busY, strokeWidth, color);
-  surface.capsule(children[0], busY, children[children.length - 1], busY, strokeWidth, color);
+const drawElbow = (surface, parentBottom, parentCenter, children, childTop, busY, stroke, color) => {
+  surface.capsule(parentCenter, parentBottom, parentCenter, busY, stroke, color);
+  surface.capsule(children[0], busY, children[children.length - 1], busY, stroke, color);
   for (const child of children) {
-    surface.capsule(child, busY, child, childTop, strokeWidth, color);
+    surface.capsule(child, busY, child, childTop, stroke, color);
   }
 };
 
-const renderLogo = () => {
-  const surface = new Surface(SIZE, SUPERSAMPLE);
+const renderMark = (asset) => {
+  const surface = new Surface(asset.size, SUPERSAMPLE);
   surface.fill(PALETTE.page);
-  surface.roundedRect(0, 0, SIZE, SIZE, TILE_RADIUS, PALETTE.brand);
+  surface.roundedRect(0, 0, asset.size, asset.size, asset.tileRadius, PALETTE.brand);
 
   // Connectors first so the nodes sit on top of the joins.
-  drawConnectors(
-    surface,
-    ROOT,
-    ROOT.centers[0],
-    BRANCH.centers,
-    BRANCH.centerY - BRANCH.height / 2,
-    BRANCH_BUS_Y,
-    BRANCH_STROKE,
-    PALETTE.node
-  );
-  const leafTop = LEAF.centerY - LEAF.height / 2;
-  BRANCH.centers.forEach((branchCenter, index) => {
-    const perBranch = LEAF.centers.length / BRANCH.centers.length;
-    drawConnectors(
-      surface,
-      BRANCH,
-      branchCenter,
-      LEAF.centers.slice(index * perBranch, (index + 1) * perBranch),
-      leafTop,
-      LEAF_BUS_Y,
-      LEAF_STROKE,
-      PALETTE.leaf
-    );
-  });
+  for (const link of asset.links) {
+    const parent = asset.levels[link.parent];
+    const child = asset.levels[link.parent + 1];
+    const perParent = child.centers.length / parent.centers.length;
+    parent.centers.forEach((parentCenter, index) => {
+      drawElbow(
+        surface,
+        parent.centerY + parent.height / 2,
+        parentCenter,
+        child.centers.slice(index * perParent, (index + 1) * perParent),
+        child.centerY - child.height / 2,
+        link.busY,
+        link.stroke,
+        link.color
+      );
+    });
+  }
 
-  drawRow(surface, ROOT, PALETTE.node);
-  drawRow(surface, BRANCH, PALETTE.node);
-  drawRow(surface, LEAF, PALETTE.leaf);
+  for (const level of asset.levels) {
+    drawLevel(surface, level);
+  }
 
-  return { width: SIZE, height: SIZE, rgba: surface.resolve() };
+  return { width: asset.size, height: asset.size, rgba: surface.resolve() };
 };
 
 // --- PNG encoding -------------------------------------------------------------
@@ -345,28 +383,36 @@ const encodePng = (width, height, rgba) => {
   ]);
 };
 
-const buildPartnerCenterLogo = () => {
-  const logo = renderLogo();
-  return { ...logo, png: encodePng(logo.width, logo.height, logo.rgba) };
-};
+const buildBrandAssets = () =>
+  ASSETS.map((asset) => {
+    const mark = renderMark(asset);
+    return { ...asset, ...mark, png: encodePng(mark.width, mark.height, mark.rgba) };
+  });
 
-module.exports = { buildPartnerCenterLogo, renderLogo, encodePng, SIZE };
+module.exports = { ASSETS, buildBrandAssets, renderMark, encodePng, MIN_COLORS };
 
 if (require.main === module) {
-  const logo = buildPartnerCenterLogo();
-  fs.writeFileSync(targetPath, logo.png);
+  for (const asset of buildBrandAssets()) {
+    const target = path.join(root, ...asset.relativePath.split("/"));
+    fs.writeFileSync(target, asset.png);
 
-  // Verified with the same decoder the publication gate uses, so a render that
-  // silently produced a flat or malformed image cannot be committed.
-  const metadata = readPngMetadata(targetPath);
-  if (metadata.width !== SIZE || metadata.height !== SIZE) {
-    fail(`rendered ${metadata.width}x${metadata.height} but Partner Center requires exactly ${SIZE}x${SIZE}`);
+    // Verified with the same decoder the publication gate uses, so a render that
+    // silently produced a flat or malformed image cannot be committed.
+    const metadata = readPngMetadata(target);
+    if (metadata.width !== asset.size || metadata.height !== asset.size) {
+      fail(
+        `${asset.relativePath} rendered ${metadata.width}x${metadata.height} but must be exactly ${asset.size}x${asset.size}`
+      );
+    }
+    const floor = MIN_COLORS[asset.size];
+    if (metadata.distinctColors < floor) {
+      fail(
+        `${asset.relativePath} rendered only ${metadata.distinctColors} distinct colours, below the ${floor} required of an antialiased mark`
+      );
+    }
+    process.stdout.write(
+      `${asset.relativePath} written: ${metadata.width}x${metadata.height}, ${metadata.bytes} bytes, ` +
+        `${metadata.distinctColors} distinct colours, ${metadata.sha256}\n`
+    );
   }
-  if (metadata.distinctColors < 24) {
-    fail(`rendered only ${metadata.distinctColors} distinct colours, which is not an antialiased mark`);
-  }
-  process.stdout.write(
-    `${relativeTarget} written: ${metadata.width}x${metadata.height}, ${metadata.bytes} bytes, ` +
-      `${metadata.distinctColors} distinct colours, ${metadata.sha256}\n`
-  );
 }

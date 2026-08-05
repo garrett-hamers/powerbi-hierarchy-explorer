@@ -17,18 +17,23 @@ is bumped to keep the version-to-bytes mapping honest.
 - Add a deterministic Partner Center publication logo asset contract
   (`assets/partner-center-logo.png`), include its metadata in release manifests,
   and run CI on lowercase `certification` snapshots.
-- Render the Partner Center listing logo properly. It had been the 20x20
-  `assets/icon.png` scaled up, so it held exactly two colours with no
-  intermediate tones and every curve stair-stepped at 300x300, against
-  Microsoft's guidance that store images must not be poorly rendered. It is now
-  drawn by `npm run logo` (`scripts/build-partner-center-logo.cjs`) as an
-  antialiased parent/child tree on the `#2764C4` brand tile, using the Node
-  standard library only. `npm run validate-publication-assets` now also requires
-  at least 24 distinct colours in the logo, so a flat placeholder can no longer
-  pass, and `tests/package.test.ts` re-renders the mark and compares pixels so
-  the committed file cannot drift from its generator. The 20x20 icon is
-  unchanged and the packaged `.pbiviz` bytes are unaffected: the package embeds
-  the icon, not the listing logo.
+- Render both brand marks properly. `assets/partner-center-logo.png` had been the
+  20x20 `assets/icon.png` scaled up, and the icon itself was equally flat: both
+  held exactly two colours with no intermediate tones, so every curve
+  stair-stepped, against Microsoft's guidance that store images must not be
+  poorly rendered. Both are now drawn by `npm run brand-assets`
+  (`scripts/build-brand-assets.cjs`) as the same antialiased parent/child tree on
+  the `#2764C4` brand tile, using the Node standard library only. The logo is
+  300x300 with 57 distinct colours; the icon is 20x20 with 27, carrying the top
+  two levels of the same tree at weights tuned for 20 pixels.
+  `npm run validate-publication-assets` now enforces a minimum distinct-colour
+  count per asset class - 16 for the logo, 8 for the icon, since one floor cannot
+  serve both canvas sizes - and checks that `pbiviz.json` packages the icon it
+  just validated. `tests/package.test.ts` re-renders both marks and compares
+  pixels so the committed files cannot drift from their generator. The icon is
+  embedded in the package as `content.iconBase64`, so the packaged bytes move
+  again within `1.0.1.0`; that version has not been published, so the
+  version-to-bytes mapping stays honest.
 - Ship the compiled stylesheet inside the package. `src/visual.ts` never imported
   `style/visual.less`, so powerbi-visuals-tools bundled an empty `content.css`
   and the visual rendered completely unstyled in the host.

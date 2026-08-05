@@ -8,6 +8,8 @@
  *     description, support URL, author name and author email
  *   - the Partner Center logo is a real 300x300 PNG carrying genuinely
  *     antialiased artwork rather than a flat placeholder
+ *   - the visualization pane icon is a real 20x20 PNG, likewise antialiased,
+ *     and is the file pbiviz.json actually packages
  *   - 1 to 5 screenshots exist, each a real PNG at exactly 1366x768 and at most
  *     1024 KB
  *   - the support and privacy policy URLs are https
@@ -23,6 +25,7 @@ const { readPngMetadata } = require("./read-png-metadata.cjs");
 const root = path.resolve(__dirname, "..");
 
 const LOGO = { path: "assets/partner-center-logo.png", width: 300, height: 300 };
+const ICON = { path: "assets/icon.png", width: 20, height: 20 };
 const SCREENSHOTS = {
   directory: "assets/screenshots",
   width: 1366,
@@ -41,16 +44,23 @@ const LISTING_PRICING = "AppSource listing: Free";
 const SAMPLE_PROJECT = "samples/AtlynHierarchyExplorerSample.pbip";
 
 // A single flat rectangle is what a fabricated placeholder looks like; genuine
-// artwork always clears these thresholds. Screenshots contain antialiased text,
-// so they sit far above the logo.
+// artwork always clears these thresholds.
 //
-// The logo threshold is deliberately well above a hard-edged two-tone mark. Any
-// image whose curves and diagonals are genuinely antialiased carries dozens of
-// intermediate tones, while a flat placeholder - or an icon nearest-neighbour
-// upscaled to 300x300 - carries only the handful of colours it was drawn with
-// and would stair-step on the AppSource offer card. `npm run logo` renders the
-// committed mark and reports its count, currently comfortably above this floor.
-const MIN_LOGO_COLORS = 24;
+// The floors are per asset class, because one number does not transfer between
+// canvas sizes. A 20x20 icon has 400 pixels to work with and only its curves can
+// carry intermediate tones, so healthy icons across this portfolio land between
+// 10 and 118 colours; healthy 300x300 logos land between 20 and 194. A floor
+// calibrated on logos would reject a perfectly good icon, and a floor calibrated
+// on icons would wave a degenerate logo through. A ratio does not transfer
+// either: it scales inversely with canvas area, so the same two-colour defect is
+// 0.002% of a logo but 0.5% of an icon.
+//
+// Each floor therefore sits below the healthiest-known minimum for its class, so
+// a legitimate simpler redesign is not tripped, while still failing a two-tone
+// asset by a wide margin. The committed marks clear them by 3.6x and 3.4x, and
+// `npm run brand-assets` reports both counts.
+const MIN_LOGO_COLORS = 16;
+const MIN_ICON_COLORS = 8;
 const MIN_SCREENSHOT_COLORS = 64;
 
 const failures = [];
@@ -135,13 +145,26 @@ if (typeof author.email === "string" && /(\.example|example\.|noreply|no-reply)/
   fail(`pbiviz.json author.email must not be a placeholder or noreply address; found ${author.email}`);
 }
 
-// --- Logo ---------------------------------------------------------------------
+// --- Logo and icon ------------------------------------------------------------
 
 const logo = checkPng(LOGO.path, {
   width: LOGO.width,
   height: LOGO.height,
   minColors: MIN_LOGO_COLORS,
   label: "Partner Center logo"
+});
+
+// The icon is the one brand mark that ships inside the .pbiviz, embedded as
+// content.iconBase64, so a wrong path here means Power BI packages something
+// other than the file this gate just inspected.
+if (manifest.assets?.icon !== ICON.path) {
+  fail(`pbiviz.json assets.icon must be ${ICON.path}; found ${manifest.assets?.icon}`);
+}
+const icon = checkPng(ICON.path, {
+  width: ICON.width,
+  height: ICON.height,
+  minColors: MIN_ICON_COLORS,
+  label: "Visualization pane icon"
 });
 
 // --- Screenshots --------------------------------------------------------------
@@ -212,6 +235,10 @@ if (failures.length > 0) {
 console.log(
   `Validated ${LOGO.path} ${logo.width}x${logo.height} ${logo.bytes} bytes ` +
     `${logo.distinctColors} distinct colours ${logo.sha256}`
+);
+console.log(
+  `Validated ${ICON.path} ${icon.width}x${icon.height} ${icon.bytes} bytes ` +
+    `${icon.distinctColors} distinct colours ${icon.sha256}`
 );
 for (const screenshot of screenshots) {
   console.log(
