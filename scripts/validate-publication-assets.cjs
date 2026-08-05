@@ -80,10 +80,18 @@ const MIN_LOGO_COLORS = 16;
 //
 // A screenshot's colour count tracks what the scene contains, so it cannot
 // separate a correct render from a wrong-but-plausible one. Across this
-// portfolio the correct renders span 261 (funnel, whose flat design is meant to
-// be that sparse) to 3,101 (scatter, which plots many coloured points), and one
-// sibling's entirely correct captures are ~95-97% white by pixel share. No
-// single threshold sorts good from bad across that range.
+// portfolio the correct renders span 261 distinct colours (funnel, whose flat
+// design is meant to be that sparse) to 3,101 (scatter, which plots many
+// coloured points), and 94.9-96.4% of the pixels in one sibling's entirely
+// correct captures are exactly #ffffff. No single threshold sorts good from bad
+// across that range.
+//
+// Those figures are stated with their metric on purpose. A bare percentage is as
+// unreproducible as a bare threshold: "95% white" means different things by
+// exact-match and by a >=250-per-channel test, and a maintainer who measures a
+// different quantity and gets a different answer will reasonably discount the
+// whole comment. Anything cited here must be re-derivable from the definition
+// given - exact #ffffff pixel share needs no threshold choice at all.
 //
 // 64 is therefore set far below every one of those minima on purpose. All it can
 // catch is a capture that is essentially blank - a harness that rendered nothing,
