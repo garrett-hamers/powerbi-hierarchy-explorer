@@ -17,11 +17,15 @@ samples/**/*.pbism text eol=lf
 # hash differently on Windows and Linux from the very same commit. Pinning them
 # to LF removes that dependency.
 #
-# This repository is not currently affected - a Windows build and the Linux CI
-# runner produce the same SHA-256 for the same commit - because pbiviz parses
-# these files rather than copying them. That is a property of the tool, not a
-# guarantee, and npm run verify-reproducible-package cannot detect a regression
-# because it only compares two builds on one machine.
+# This repository is not currently affected, because pbiviz parses these files
+# rather than copying them: a Windows build, the Linux CI runner building the
+# same commit on a branch, the CI runner building it again after merge, and an
+# independent re-hash of that published artifact all produced the same SHA-256.
+#
+# That is still a property of the tool rather than a guarantee, and it is worth
+# keeping these rules: npm run verify-reproducible-package compares two builds on
+# one machine, so it cannot detect a regression here no matter how many times the
+# current state is confirmed.
 *.resjson text eol=lf
 *.svg text eol=lf
 *.less text eol=lf
