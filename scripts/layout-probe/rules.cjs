@@ -30,6 +30,7 @@ const RULES = {
   hiddenScroll: "hidden-scroll",
   focusNotFullyVisible: "focus-not-fully-visible",
   chromeOutlivesChart: "chrome-outlives-chart",
+  chartNotVisible: "chart-not-visible",
   textEscapesOwner: "text-escapes-owner",
   countDrifted: "count-drifted"
 };
@@ -493,6 +494,55 @@ function checkChromeOutlivesChart(measurement, tolerance = DEFAULT_TOLERANCE) {
 }
 
 /**
+ * How much of the chart a reader can actually see, and which way it failed.
+ *
+ * The graph carries a min-height and sits inside a scroll container, so when the
+ * tile runs short the graph does not shrink - the viewport onto it does. An
+ * assertion about the graph's own height passes on a 170px chart behind a 6px
+ * window, which is the same shape as an accessible table present in the DOM at
+ * full height with zero visible height. So the measurement is the intersection
+ * of the two, and the diagnosis says which failure it is, because "clipped to a
+ * sliver behind a scrollbar" and "collapsed to nothing" look different on
+ * screen, degrade differently for a reader, and want different fixes.
+ */
+function checkChartVisibility(chart, options = {}) {
+  if (!chart) {
+    return [];
+  }
+  const tolerance = options.tolerance === undefined ? DEFAULT_TOLERANCE : finite(options.tolerance, "tolerance");
+  const minimum = finite(options.minimumVisibleHeight, "minimumVisibleHeight");
+  const graphHeight = finite(chart.graphHeight, "chart.graphHeight");
+  const visible = finite(chart.visibleHeight, "chart.visibleHeight");
+  const viewportHeight = finite(chart.viewportHeight, "chart.viewportHeight");
+  if (visible + tolerance >= minimum) {
+    return [];
+  }
+  const diagnosis =
+    graphHeight <= tolerance
+      ? "collapsed"
+      : chart.isScrollContainer
+        ? "sliver"
+        : "clipped";
+  const detail =
+    diagnosis === "collapsed"
+      ? `the chart drew nothing at all: the graph itself is ${graphHeight.toFixed(1)}px tall`
+      : diagnosis === "sliver"
+        ? `the graph is ${graphHeight.toFixed(1)}px tall behind a ${viewportHeight.toFixed(1)}px viewport, so ` +
+          `${visible.toFixed(1)}px of it - ${(chart.visibleFraction * 100).toFixed(1)}% - is on screen and the rest ` +
+          "is behind a scrollbar. The chart is present at full height and still shows a reader almost nothing"
+        : `only ${visible.toFixed(1)}px of a ${graphHeight.toFixed(1)}px graph falls inside its ` +
+          `${viewportHeight.toFixed(1)}px viewport, and the viewport does not scroll, so the rest is unreachable`;
+  return [
+    violation(
+      RULES.chartNotVisible,
+      chart.graphPath || ".atlyn-graph",
+      `${detail} (needs ${minimum}px visible)`,
+      { escape: minimum - visible, diagnosis, visibleHeight: visible, graphHeight, viewportHeight }
+    )
+  ];
+}
+
+/**
  * Counts that must not drift without someone deciding they should. A visual
  * that grows its first position:sticky element, or its first position:fixed
  * one, has grown a whole class of behaviour this probe would otherwise walk
@@ -546,6 +596,7 @@ module.exports = {
   checkFocusFullyVisible,
   checkHiddenScroll,
   checkChromeOutlivesChart,
+  checkChartVisibility,
   checkDeclaredCounts,
   summarize
 };

@@ -333,6 +333,64 @@ describe("which region loses when the tile runs short", () => {
   });
 });
 
+describe("how much of the chart a reader can see", () => {
+  const base = {
+    graphPath: "svg.atlyn-graph",
+    viewportPath: "div.atlyn-canvas-wrap",
+    graphHeight: 796,
+    viewportHeight: 0,
+    visibleHeight: 0,
+    visibleFraction: 0,
+    isScrollContainer: true
+  };
+
+  /*
+   * The distinction the graph's own height cannot make. .atlyn-graph carries
+   * min-height: 170px, so it is never zero: an assertion on it passes on every
+   * one of these.
+   */
+  test("names a full-height chart behind a collapsed viewport as a sliver, not an empty chart", () => {
+    const found = rules.checkChartVisibility(base, { minimumVisibleHeight: 60 });
+    expect(found).toHaveLength(1);
+    expect(found[0].rule).toBe(rules.RULES.chartNotVisible);
+    expect(found[0].diagnosis).toBe("sliver");
+    expect(found[0].detail).toContain("796.0px tall behind a 0.0px viewport");
+    expect(found[0].detail).toContain("behind a scrollbar");
+    expect(found[0].escape).toBe(60);
+  });
+
+  test("distinguishes a chart that genuinely drew nothing", () => {
+    const found = rules.checkChartVisibility(
+      { ...base, graphHeight: 0, isScrollContainer: false },
+      { minimumVisibleHeight: 60 }
+    );
+    expect(found[0].diagnosis).toBe("collapsed");
+    expect(found[0].detail).toContain("drew nothing at all");
+  });
+
+  test("distinguishes a chart clipped by a viewport that does not scroll", () => {
+    const found = rules.checkChartVisibility(
+      { ...base, viewportHeight: 12, visibleHeight: 12, visibleFraction: 12 / 796, isScrollContainer: false },
+      { minimumVisibleHeight: 60 }
+    );
+    expect(found[0].diagnosis).toBe("clipped");
+    expect(found[0].detail).toContain("does not scroll");
+  });
+
+  test("passes a chart with a real window onto it", () => {
+    expect(
+      rules.checkChartVisibility(
+        { ...base, viewportHeight: 185, visibleHeight: 185, visibleFraction: 185 / 796 },
+        { minimumVisibleHeight: 60 }
+      )
+    ).toEqual([]);
+  });
+
+  test("has nothing to say when there is no chart to measure", () => {
+    expect(rules.checkChartVisibility(null, { minimumVisibleHeight: 60 })).toEqual([]);
+  });
+});
+
 describe("declared counts", () => {
   test("catches a visual that has grown its first sticky element", () => {
     const found = rules.checkDeclaredCounts({ sticky: 1, fixed: 0 }, { sticky: 0, fixed: 0 });

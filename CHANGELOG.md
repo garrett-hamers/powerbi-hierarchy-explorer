@@ -26,20 +26,23 @@ is bumped to keep the version-to-bytes mapping honest.
   - A `min-height: 96px` floor on the root made the visual 96px tall inside an
     80x80 tile, so the host ate 15.5px of it. The floor is gone: the tile is the
     authority on how much room there is.
-  - The chart degraded before the chrome. Only `.atlyn-canvas-wrap` carried
-    `min-height: 0`, so it was the sole region that could shrink and it paid for
-    every other strip. With a data-quality message present the diagnostics strip
-    held exactly 86px at every tile size including 80x80, the toolbar held 40px
-    and *grew* to 153px as the tile narrowed and it wrapped, and a focused tree
-    pane took another 38% - while the chart rendered at **0px at 398x298, 258x198,
-    178x138 and 80x80**. The visual still looked populated, which is what made it
-    dangerous. Density is now resolved against the height actually left for the
-    chart rather than the raw tile height, and the diagnostics strip - which
-    scrolls, so capping it costs a reader nothing they cannot scroll back - yields
-    its cap before the chart yields its existence. Below the point where a message
-    cannot be shown at all, diagnostics degrade to screen-reader-only rather than
-    squeezing the chart out. The priority is now explicit: degrade chrome, never
-    data.
+  - The chart degraded before the chrome, and it did so as a sliver rather than
+    as an empty chart. `.atlyn-graph` carries `min-height: 170px` and sits inside
+    a scroll container, so the graph never collapses - it rendered at 170-796px
+    in all 180 probed cases, and any assertion on its own height would have
+    passed on every failure. What collapsed was the scrollport onto it. Only
+    `.atlyn-canvas-wrap` carried `min-height: 0`, so it was the sole region that
+    could shrink and it paid for every other strip: the diagnostics strip held
+    exactly 86px at every tile size including 80x80, the toolbar held 40px and
+    *grew* to 153px as the tile narrowed and it wrapped, and a focused tree pane
+    took another 38%. The measured result was **0.0% of a 796px chart visible at
+    258x198, 178x138 and 80x80** - a scroll container with no visible area at all
+    - and 5.5% to 6.9% at 398x298. Density is now resolved against the height
+    actually left for the chart, counting both the diagnostics strip and a
+    focused tree pane as the chrome the chart pays for. Below the point where a
+    message cannot be shown at all, diagnostics and the `aria-live` status strip
+    degrade to screen-reader-only rather than squeezing the chart out. The
+    priority is now explicit: degrade chrome, never data.
   - Every chrome strip was `flex: 0 0 auto`, so on a small tile the toolbar,
     status strip and breadcrumb between them exceeded the tile height and pushed
     each other past the clipped edge - the breadcrumb by 285.5px at 80x80 - while

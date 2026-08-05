@@ -91,7 +91,7 @@ const FIXES = [
         file: "src/visual.ts",
         from:
           "    this.root.dataset.density =\n" +
-          '      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";',
+          '      width > 0 && height > 0 ? resolveDensity(width, height, chromeCost) : "comfortable";',
         to: '    this.root.dataset.density = "comfortable";'
       }
     ],
@@ -107,7 +107,7 @@ const FIXES = [
         file: "src/visual.ts",
         from:
           "    this.root.dataset.density =\n" +
-          '      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";',
+          '      width > 0 && height > 0 ? resolveDensity(width, height, chromeCost) : "comfortable";',
         to: '    this.root.dataset.density = "comfortable";'
       }
     ],
@@ -152,26 +152,26 @@ const FIXES = [
     revert: [
       {
         file: "src/visual.ts",
-        from: "  const available = height - (diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0);",
-        to: "  const available = height;"
+        from: "    const diagnosticsCost = this.diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0;",
+        to: "    const diagnosticsCost = 0;"
       }
     ],
-    expect: { rule: "chrome-outlives-chart", minEscape: 2, states: ["diagnostics", "diagnostics-tree-focused"] }
+    expect: { rule: "chart-not-visible", minEscape: 4, states: ["diagnostics", "diagnostics-tree-focused"] }
   },
   {
-    id: "diagnostics-cap-yields-to-the-chart",
+    id: "density-counts-the-focused-tree-pane",
     summary:
-      "At compact density the diagnostics strip held its full 86px while the chart fell below the " +
-      "height at which it shows anything at all - and the strip scrolls, so capping it costs a reader " +
-      "nothing they cannot scroll back",
+      "The accessible tree pane is chrome the chart pays for too, and it was not counted: at 398x298 " +
+      "with the tree focused the chart was a 28px window onto a 506px graph - 5.5% of it - which is a " +
+      "chart present at full height showing a reader less than one whole node card",
     revert: [
       {
-        file: "style/visual.less",
-        from: '.atlyn-root[data-density="compact"] .atlyn-diagnostics {\n  max-height: 64px;\n}',
-        to: '.atlyn-root[data-density="compact"] .atlyn-diagnostics {\n  max-height: 86px;\n}'
+        file: "src/visual.ts",
+        from: "    const treeCost = this.treeFocused ? Math.round(height * TREE_PANE_FRACTION) : 0;",
+        to: "    const treeCost = 0;"
       }
     ],
-    expect: { rule: "chrome-outlives-chart", minEscape: 2, tiles: ["398x298"], states: ["diagnostics-tree-focused"] }
+    expect: { rule: "chart-not-visible", minEscape: 25, tiles: ["398x298"], states: ["tree-focused"] }
   },
   {
     id: "screen-reader-region-stays-inside",

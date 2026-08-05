@@ -130,10 +130,14 @@ probe fed clean data and never given a focus event never lays either of them out
 - and never sees the state where the chrome and the chart compete for a short
 tile. The bug lives in the state you did not put the visual into.
 
-Every run reports rendered heights for the canvas, the tree, the toolbar and the
-diagnostics strip, plus `root.scrollTop`, at each tile with diagnostics present,
-whether or not any rule fired. "Does the chart survive" is answered by a table of
-measurements, not by a pass.
+Every run reports rendered heights for the graph, the scrollport onto it, the
+visible intersection of the two, whether that scrollport still scrolls, and the
+tree, toolbar and diagnostics strips, plus `root.scrollTop`, at each tile with
+diagnostics present - whether or not any rule fired. The intersection is the
+number that matters: `.atlyn-graph` carries `min-height: 170px` and scrolls, so
+it never collapses on its own, and a rule asserting the graph's own height would
+pass on a 796px chart behind a 0px window. "Does the chart survive" is answered
+by a table of measurements, not by a pass.
 
 The rules are pure functions in `scripts/layout-probe/rules.cjs`, so
 `tests/layout-rules.test.ts` can drive them with deliberately bad measurements

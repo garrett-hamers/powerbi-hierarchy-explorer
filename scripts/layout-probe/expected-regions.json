@@ -35,8 +35,11 @@
     "fixed": 0
   },
   "minimumSizes": {
-    "minimumNote": "A drawing canvas below this is a visual that renders nothing at all.",
+    "minimumNote": "canvasHeight is the scrollport onto the chart. visibleChartHeight is how much of the graph actually falls inside that scrollport - the graph carries min-height: 170px and scrolls, so it never collapses on its own and asserting its height would pass on a 170px chart behind a 6px window.",
+    "visibleChartNote": "One whole node card, which is 48px plus the 12px layout padding above it: below that a reader cannot see a single complete node. Capped at a fraction of the tile because an 80x80 tile cannot afford 60px of chart alongside anything else, and a floor no layout can satisfy is a floor nobody can act on.",
     "canvasWidth": 24,
-    "canvasHeight": 24
+    "canvasHeight": 24,
+    "visibleChartHeight": 60,
+    "visibleChartFractionOfTile": 0.45
   }
 }

@@ -303,17 +303,6 @@
   min-width: 0;
 }
 
-/*
- * The diagnostics strip scrolls, so capping it lower costs a reader nothing
- * they cannot scroll back. The chart does not scroll back into existence, so
- * when the two compete for a short tile the cap moves and the chart keeps its
- * room. The message is still never sliced mid-line - it is a scroll container,
- * not a clipped one.
- */
-.atlyn-root[data-density="compact"] .atlyn-diagnostics {
-  max-height: 64px;
-}
-
 .atlyn-root[data-density="minimal"] .atlyn-status,
 .atlyn-root[data-density="minimal"] .atlyn-diagnostics {
   .atlyn-visually-hidden();

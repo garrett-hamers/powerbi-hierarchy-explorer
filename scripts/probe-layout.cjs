@@ -246,6 +246,14 @@ const evaluateCase = (measurement, context) => {  const violations = [];
       })
     );
   }
+  violations.push(
+    ...rules.checkChartVisibility(measurement.chart, {
+      minimumVisibleHeight: Math.min(
+        expectations.minimumSizes.visibleChartHeight,
+        Math.floor(measurement.tile.height * expectations.minimumSizes.visibleChartFractionOfTile)
+      )
+    })
+  );
   return violations.map((item) => Object.assign({}, item, context));
 };
 
@@ -430,17 +438,21 @@ const main = async () => {
   );
   if (chromeCases.length > 0) {
     process.stdout.write("Chrome versus chart, with diagnostics present (rendered heights, px):\n");
-    process.stdout.write("  tile      state                       canvas  tree toolbar diags  root.scrollTop\n");
+    process.stdout.write(
+      "  tile      state                       graph  wrap  visible  scrolls?  tree toolbar diags  root.scrollTop\n"
+    );
     chromeCases.forEach((result) => {
-      const canvas = result.measurement.regions.find((item) => item.label === "drawing canvas");
+      const chart = result.measurement.chart;
       const rootScroll = (result.measurement.hiddenScrollRegions || []).find((item) =>
         item.path.endsWith("div.atlyn-root")
       );
       process.stdout.write(
         `  ${result.tile.padEnd(9)} ${result.state.padEnd(26)} ` +
-          `${format(canvas ? canvas.clientHeight : null)}  ${format(heightOf(result, "accessible tree"))} ` +
-          `${format(heightOf(result, "toolbar"))}  ${format(heightOf(result, "diagnostics"))}  ` +
-          `${rootScroll ? rootScroll.scrollTop.toFixed(0) : "n/a"}\n`
+          `${format(chart ? chart.graphHeight : null)} ${format(chart ? chart.viewportHeight : null)} ` +
+          `${format(chart ? chart.visibleHeight : null)}    ` +
+          `${(chart && chart.isScrollContainer ? "yes" : "no").padEnd(8)} ` +
+          `${format(heightOf(result, "accessible tree"))} ${format(heightOf(result, "toolbar"))}  ` +
+          `${format(heightOf(result, "diagnostics"))}  ${rootScroll ? rootScroll.scrollTop.toFixed(0) : "n/a"}\n`
       );
     });
     process.stdout.write("\n");
@@ -493,6 +505,7 @@ const main = async () => {
           scrolled: result.scrolled,
           root: result.measurement.root,
           counts: result.measurement.counts,
+          chart: result.measurement.chart,
           regions: result.measurement.regions,
           scrollRegions: result.measurement.scrollRegions,
           violations: result.violations

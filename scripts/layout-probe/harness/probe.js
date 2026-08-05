@@ -301,6 +301,55 @@
     return { rect: paddingBoxOf(tile, tileStyle), path: "#tile" };
   }
 
+  /*
+   * How much of the chart a reader can actually see.
+   *
+   * The graph carries min-height: 170px and lives inside a scroll container, so
+   * it does not collapse when the tile runs short - the viewport onto it does.
+   * Asserting the graph's own height would therefore pass on a 170px chart
+   * behind a 6px window, which shows a reader almost nothing. The honest number
+   * is the intersection of the two, and isScrollContainer is what separates
+   * "clipped to a sliver" from "collapsed to nothing".
+   */
+  function chartVisibility() {
+    var tile = tileElement();
+    var wrap = tile.querySelector(".atlyn-canvas-wrap");
+    var graph = tile.querySelector(".atlyn-graph");
+    if (!wrap || !graph) {
+      return null;
+    }
+    var wrapStyle = getComputedStyle(wrap);
+    var wrapRect = wrap.getBoundingClientRect();
+    // clientLeft/clientTop step over the border and put the origin at the
+    // scrollport, which is where a scrollbar gutter is excluded - and on which
+    // side it sits differs between LTR and RTL.
+    var viewport = {
+      left: wrapRect.left + wrap.clientLeft,
+      top: wrapRect.top + wrap.clientTop,
+      right: wrapRect.left + wrap.clientLeft + wrap.clientWidth,
+      bottom: wrapRect.top + wrap.clientTop + wrap.clientHeight,
+      width: wrap.clientWidth,
+      height: wrap.clientHeight
+    };
+    var graphRect = rectOf(graph);
+    var overlap = intersect(graphRect, viewport);
+    return {
+      graphPath: pathOf(graph),
+      viewportPath: pathOf(wrap),
+      graphHeight: graphRect.height,
+      graphWidth: graphRect.width,
+      viewportHeight: viewport.height,
+      viewportWidth: viewport.width,
+      visibleHeight: overlap.height,
+      visibleWidth: overlap.width,
+      visibleFraction: graphRect.height > 0 ? overlap.height / graphRect.height : 0,
+      scrollHeight: wrap.scrollHeight,
+      clientHeight: wrap.clientHeight,
+      isScrollContainer: wrap.scrollHeight > wrap.clientHeight,
+      overflowY: wrapStyle.overflowY
+    };
+  }
+
   window.__probeMeasure = function measure() {
     var tile = tileElement();
     var tileStyle = getComputedStyle(tile);
@@ -478,6 +527,7 @@
       hiddenScrollRegions: hiddenScrollRegions,
       screenReaderRegions: screenReaderRegions,
       textPairs: textPairs,
+      chart: chartVisibility(),
       textFit: { worstFill: worstFill, worstFillPath: worstFillPath },
       regions: [
         namedRegion(root, "visual root"),

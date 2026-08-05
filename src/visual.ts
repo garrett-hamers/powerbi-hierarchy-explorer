@@ -80,18 +80,21 @@ const MINIMAL_MAX_WIDTH = 200;
  */
 const DIAGNOSTICS_STRIP_HEIGHT = 86;
 
+/* What the accessible tree pane costs while it holds focus, per the stylesheet. */
+const TREE_PANE_FRACTION = 0.38;
+
 /*
  * Density is resolved against the height that is actually left for the chart,
- * not the raw tile height. Only .atlyn-canvas-wrap can shrink, so any strip
+ * not the raw tile height. Only .atlyn-canvas-wrap can shrink, so every strip
  * that appears is paid for entirely by the drawing area: with a diagnostics
- * message present, a 398x298 tile has as little room for the chart as a
- * 398x212 tile has without one, and it should degrade its chrome accordingly.
- * Sizing the chrome by the tile alone is what lets the toolbar, the diagnostics
- * strip and a focused tree pane all survive at full size while the chart they
- * surround collapses to nothing.
+ * message present and the tree holding focus, a 398x298 tile has as little room
+ * for the chart as a 398x99 tile has with neither, and it should degrade its
+ * chrome accordingly. Sizing the chrome by the tile alone is what lets the
+ * toolbar, the diagnostics strip and a focused tree pane all survive at full
+ * size while the chart they surround is reduced to a sliver.
  */
-function resolveDensity(width: number, height: number, diagnosticsShown = false): Density {
-  const available = height - (diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0);
+function resolveDensity(width: number, height: number, chromeCost = 0): Density {
+  const available = height - chromeCost;
   if (available < MINIMAL_MAX_HEIGHT || width < MINIMAL_MAX_WIDTH) {
     return "minimal";
   }
@@ -213,6 +216,8 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   private typeaheadTimer: ReturnType<typeof setTimeout> | undefined;
   private suppressedClickTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
+  private diagnosticsShown = false;
+  private treeFocused = false;
   private lastUpdateOptions: VisualUpdateOptions | undefined;
   private longPressTimer: ReturnType<typeof setTimeout> | undefined;
   private suppressNextClick = false;
@@ -845,7 +850,12 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
   };
 
   private onSemanticTreeFocusIn = (event: FocusEvent): void => {
+    this.treeFocused = true;
     this.root.dataset.treeFocused = "true";
+    // The pane it opens is chrome the chart pays for, so the density has to be
+    // recomputed here: focus does not re-render, and without this the visual
+    // keeps sizing its chrome for a tile that no longer has that room.
+    this.applyDensity();
     const id = this.nodeIdFromTarget(event.target, "semantic-node-id");
     if (id) {
       this.focusedId = id;
@@ -862,7 +872,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     if (next && this.semanticTree.contains(next)) {
       return;
     }
+    this.treeFocused = false;
     this.root.dataset.treeFocused = "false";
+    this.applyDensity();
   };
 
   private onSemanticTreeTouchStart = (event: TouchEvent): void => {
@@ -911,9 +923,9 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
     );
     const height = Math.max(150, this.lastUpdateOptions?.viewport?.height ?? 280);
     const renderCapped = visibleIds.length > renderIds.length;
-    const diagnosticsShown =
+    this.diagnosticsShown =
       this.formatting.showDiagnostics && (this.graph.diagnostics.length > 0 || renderCapped);
-    this.applyDensity(diagnosticsShown);
+    this.applyDensity();
     const layout = computeLayout(this.graph, visibleIds, {
       width,
       height,
@@ -961,11 +973,14 @@ export class Visual implements powerbi.extensibility.visual.IVisual {
    * rather than pushed past the clipped edge where it silently disappears and
    * takes the canvas with it.
    */
-  private applyDensity(diagnosticsShown: boolean): void {
+  private applyDensity(): void {
     const width = this.lastUpdateOptions?.viewport?.width ?? this.root.clientWidth;
     const height = this.lastUpdateOptions?.viewport?.height ?? this.root.clientHeight;
+    const diagnosticsCost = this.diagnosticsShown ? DIAGNOSTICS_STRIP_HEIGHT : 0;
+    const treeCost = this.treeFocused ? Math.round(height * TREE_PANE_FRACTION) : 0;
+    const chromeCost = diagnosticsCost + treeCost;
     this.root.dataset.density =
-      width > 0 && height > 0 ? resolveDensity(width, height, diagnosticsShown) : "comfortable";
+      width > 0 && height > 0 ? resolveDensity(width, height, chromeCost) : "comfortable";
   }
 
   private renderEdges(layout: LayoutResult, visibleIds: readonly string[]): void {    const visible = new Set(visibleIds);
