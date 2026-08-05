@@ -96,6 +96,18 @@ describe("the escape walk", () => {
     expect(found[0].detail).toContain("no scroll offset brings it into view");
   });
 
+  test("rejects a scroll-exempt record it cannot measure instead of calling it clean", () => {
+    /*
+     * The instrument-risk case, as opposed to the inference-risk ones above: a
+     * record that claims exemption but carries nothing to measure. Returning no
+     * violation here would be a clean result produced without touching the
+     * element at all, which is indistinguishable from a genuinely clean one.
+     */
+    expect(() =>
+      rules.findEscapes([element({ scrollExempt: true, scrollAncestor: "div.wrap", content: null })])
+    ).toThrow(/cannot be measured must not be reported as clean/);
+  });
+
   test("skips what is not rendered and what is deliberately clipped for a screen reader", () => {
     const offscreen = box(-500, -500, 100, 25);
     expect(rules.findEscapes([element({ rect: offscreen, rendered: false })])).toEqual([]);
@@ -168,6 +180,15 @@ describe("scroll regions", () => {
     expect(found).toHaveLength(1);
     expect(found[0].rule).toBe(rules.RULES.scrollPreconditionUnmet);
     expect(found[0].detail).toContain("pass vacuously");
+  });
+
+  test("fails loudly when a region required to overflow is not a scroll container at all", () => {
+    // Not covered by the `expected` loop here on purpose: a mustOverflow entry
+    // with no matching expected entry would otherwise disappear in silence.
+    const found = rules.checkScrollRegions([], { mustOverflow: ["div.atlyn-canvas-wrap"] });
+    expect(found).toHaveLength(1);
+    expect(found[0].rule).toBe(rules.RULES.scrollPreconditionUnmet);
+    expect(found[0].detail).toContain("not a scroll container at all");
   });
 
   test("is satisfied by a region that really does overflow", () => {

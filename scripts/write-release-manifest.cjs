@@ -80,8 +80,10 @@ const screenshots = fs
  * comment is that something, until a checker exists.
  */
 let sourceCommit = process.env.GITHUB_SHA;
+let sourceCommitOrigin = "GITHUB_SHA, set by the CI run that built this artifact";
 if (!sourceCommit) {
   sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  sourceCommitOrigin = "git rev-parse HEAD in a local build; GITHUB_SHA was not set";
 }
 
 const releaseManifest = {
@@ -92,7 +94,14 @@ const releaseManifest = {
   // Says which question sourceCommit answers, in the record itself rather than
   // only in the script that writes it. Anything reconciling this file against a
   // storefront manifest reads the JSON, not the comment above.
-  sourceCommitMeaning: "the commit that built this artifact (GITHUB_SHA); not the commit whose bytes these are, which differs on any commit that does not change the package",
+  sourceCommitMeaning:
+    "the commit that built this artifact; not the commit whose bytes these are, which differs on any commit that does not change the package",
+  // Which mechanism actually supplied it. The meaning above named GITHUB_SHA
+  // unconditionally, which is wrong for a local build - the value comes from
+  // git rev-parse HEAD there. A field asserting a provenance it may not have is
+  // the defect this field exists to prevent, so it now reports what happened
+  // rather than what usually happens.
+  sourceCommitOrigin,
   visualGuid: sourceManifest.visual.guid,
   visualVersion: sourceManifest.visual.version,
   supportUrl: sourceManifest.visual.supportUrl,
