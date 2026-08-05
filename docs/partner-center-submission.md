@@ -113,10 +113,46 @@ The harness lives in `scripts/screenshot-harness/` and the data is inlined in
 `scripts/screenshot-harness/data.js`. The company and team names are invented
 for the listing.
 
+### What is verified at capture time
+
+Each scenario declares its own expectations next to its data, and the capture
+evaluates them against the live page immediately before the shutter opens. A
+scene that fails is not photographed at all, its committed image is deleted so
+a stale render cannot pass for a current one, and nothing is published until
+every scene has passed.
+
+| Scene | Must be true before the PNG is written |
+| --- | --- |
+| `01-hierarchy-overview` | All 15 rows on the canvas, 14 parent-child connectors, five distinct levels, a label and a measure subtitle on every card, no diagnostics, and "15 visible" in the status strip. |
+| `02-expand-collapse` | The accessible tree pane genuinely open and at least 80px tall, exactly `apac`, `eu-ent` and `na-ent` collapsed with other branches still expanded, 8 of the 15 nodes visible, the canvas agreeing with the tree, focus settled on `na-com` and on screen, and the breadcrumb following it. |
+| `03-search-diagnostics` | "enterprise" in the visual's own search box, all three Enterprise Sales cards highlighted, a legible diagnostics strip naming the orphan `ap-com`, and 14 cards with 12 connectors for the two-root forest. |
+
+The expectations are per scene on purpose. Each screenshot demonstrates
+something different, so one check general enough to cover all three would
+confirm none of them: a tree that renders perfectly is no evidence that search
+highlighted anything.
+
+Presence in the DOM is not treated as evidence of a render. Node cards, search
+highlights, tree rows and the diagnostics strip are measured, and each must have
+non-zero rendered size and lie inside the box the screenshot actually shows. The
+failure this guards against is an element that exists in the markup for the whole
+time it is broken while laying out at zero height, which `querySelector` finds
+every time.
+
 Screenshot bytes are deliberately **not** asserted to be reproducible, because
-font rasterisation differs between machines. What is enforced is exact
-dimensions, the 1024 KB ceiling, PNG structure, and that the image is not a flat
+font rasterisation differs between machines - and, measurably, between two runs
+on one machine: re-capturing on the machine that produced the committed files
+reproduced `01-hierarchy-overview.png` byte for byte but left 6 to 15 of the
+1,049,088 pixels in the other two differing by a single channel value. A pixel
+diff of the kind the brand assets use, which are drawn by a pure-Node
+rasteriser, would therefore fail here for reasons unrelated to correctness. What
+is enforced instead is the capture-time content above, plus exact dimensions,
+the 1024 KB ceiling, PNG structure, and that the image is not a flat
 placeholder.
+
+`npm run verify-screenshots` applies the same gate without writing any image,
+and CI runs it on every push so a regression in the visual is caught even when
+nobody re-captures.
 
 ## 3. Sample report
 
@@ -333,6 +369,14 @@ npx playwright install chromium
 npm run package
 npm run screenshots
 ```
+
+That is a second, independent gate. `validate-publication-assets` inspects
+committed files and so can only judge structure; nothing static about a PNG
+separates a correct render from a wrong but plausible one. The capture is the
+only place where what the image was *supposed* to show is still known, so the
+per-scene expectations live there - see "What is verified at capture time" in
+section 2. CI runs them as `npm run verify-screenshots`, which renders and
+asserts but writes no image.
 
 ## 6. Remaining manual steps (owner only)
 

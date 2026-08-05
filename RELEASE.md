@@ -45,7 +45,13 @@ packages are intentionally not committed.
 
    Screenshot bytes are not reproducible across machines because font
    rasterisation differs; the enforced contract is exact 1366x768 dimensions,
-   the 1024 KB ceiling, PNG structure, and non-placeholder content.
+   the 1024 KB ceiling, PNG structure, and non-placeholder content. The content
+   of each scene is enforced at capture time instead: `npm run screenshots`
+   asserts what every scene must contain - counts, interaction state and
+   measured geometry - and refuses to write a PNG whose scene did not render,
+   deleting the committed image rather than leaving a stale one in place. CI
+   runs the same gate as `npm run verify-screenshots`, which writes nothing, so
+   the scenes are checked on every push even when no image is regenerated.
 5. Review `docs/partner-center-submission.md` before submitting. It holds every
    Partner Center field with its final value and the manual steps that remain.
    If the visual changed, regenerate the offline sample report so it demos the
