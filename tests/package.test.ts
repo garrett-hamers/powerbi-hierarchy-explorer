@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import vm from "node:vm";
 
 const root = path.resolve(__dirname, "..");
@@ -263,6 +264,43 @@ describe("certification-first package contract", () => {
     // image with it.
     expect(capture.indexOf("__atlynAssertScene")).toBeLessThan(capture.indexOf("page.screenshot"));
     expect(capture).toContain("discardScreenshot");
+  });
+
+  test("pins every committed screenshot to the capture run that asserted it", () => {
+    const record = JSON.parse(
+      fs.readFileSync(path.join(root, "assets", "screenshot-capture.json"), "utf8")
+    );
+    const files = fs
+      .readdirSync(path.join(root, "assets", "screenshots"))
+      .filter((file) => file.endsWith(".png"))
+      .sort();
+
+    expect(record.capturedWith.viewport).toBe("1366x768");
+    expect(record.scenes.map((scene: { path: string }) => scene.path)).toEqual(
+      files.map((file) => `assets/screenshots/${file}`)
+    );
+
+    for (const scene of record.scenes) {
+      // The scene assertions run in a browser and are gone once they pass. The
+      // hash is what keeps them meaningful afterwards: a screenshot edited,
+      // reverted or swapped later is still a valid 1366x768 PNG under the byte
+      // cap, so nothing else in this repository would notice.
+      const bytes = fs.readFileSync(path.join(root, scene.path));
+      expect(crypto.createHash("sha256").update(bytes).digest("hex").toUpperCase()).toBe(
+        scene.sha256
+      );
+      expect(bytes.length).toBe(scene.bytes);
+      // Evidence, not a verdict: a bare pass/fail could not be re-read later.
+      expect(scene.asserted.cards).toBeGreaterThan(0);
+      expect(scene.asserted.visual.width).toBeGreaterThan(0);
+      expect(scene.asserted.visual.height).toBeGreaterThan(0);
+    }
+
+    const audit = fs.readFileSync(
+      path.join(root, "scripts", "validate-publication-assets.cjs"),
+      "utf8"
+    );
+    expect(audit).toContain("has changed since it was captured");
   });
 
   test("CI verifies the screenshot scenes without publishing images", () => {

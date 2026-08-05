@@ -90,6 +90,8 @@ if (fs.existsSync(releaseManifestPath)) {
     Array.isArray(screenshots) && screenshots.length >= 1 && screenshots.length <= 5,
     "the release manifest must record between 1 and 5 Partner Center screenshots"
   );
+  const captureRecord = readJson("assets/screenshot-capture.json");
+  const capturedScenes = new Map(captureRecord.scenes.map((scene) => [scene.path, scene]));
   for (const screenshot of screenshots) {
     assert.match(screenshot.path, /^assets\/screenshots\/.+\.png$/);
     assert.equal(screenshot.width, 1366, `${screenshot.path} must be 1366 wide`);
@@ -98,7 +100,32 @@ if (fs.existsSync(releaseManifestPath)) {
       screenshot.bytes <= 1024 * 1024,
       `${screenshot.path} must stay within the 1024 KB Partner Center limit`
     );
+
+    // The manifest carries the capture's evidence, so it must agree with the
+    // capture record rather than quietly restate a hash of whatever happens to
+    // be on disk. A recorded value nothing compares is how a wrong one survives.
+    const scene = capturedScenes.get(screenshot.path);
+    assert.ok(scene, `${screenshot.path} has no entry in assets/screenshot-capture.json`);
+    assert.equal(
+      screenshot.sha256,
+      scene.sha256,
+      `${screenshot.path} does not hash to the bytes its scene assertions were applied to`
+    );
+    assert.deepEqual(
+      screenshot.capture?.asserted,
+      scene.asserted,
+      `${screenshot.path} must carry the measurements its scene was accepted on`
+    );
+    assert.ok(
+      screenshot.capture.asserted.cards > 0,
+      `${screenshot.path} was recorded with no rendered nodes`
+    );
   }
+  assert.equal(
+    releaseManifest.publicationAssets.screenshotCapture.visualVersion,
+    sourceManifest.visual.version,
+    "the screenshots must have been captured from the version being released"
+  );
 }
 
 // A visual whose compiled stylesheet is missing renders unstyled in the host,

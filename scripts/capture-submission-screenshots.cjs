@@ -14,10 +14,18 @@
  * assets/screenshots until every scene has passed, so a broken render cannot be
  * committed as a submission asset.
  *
+ * The measurements each scene was accepted on, and the SHA-256 of the bytes
+ * published for it, are written to assets/screenshot-capture.json. Without that
+ * record the assertions would prove only that a file was correct at the moment
+ * it was written, and a screenshot edited or swapped afterwards would pass
+ * every remaining gate. validate-publication-assets re-checks the committed
+ * bytes against it on every build.
+ *
  * Pass --verify to run every scene through the same gate without publishing
  * anything. That is the form CI uses: it proves the current source still renders
- * all three scenes, without comparing image bytes, which are not reproducible
- * even between two runs on the same machine.
+ * all three scenes and still matches the committed record, without comparing
+ * image bytes, which are not reproducible even between two runs on the same
+ * machine.
  *
  * Playwright is deliberately not a dependency of this package. `npm ci` and the
  * validate job never render - they check the committed PNGs with
@@ -31,6 +39,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 
 const root = path.resolve(__dirname, "..");
@@ -38,6 +47,7 @@ const harnessDirectory = path.join(__dirname, "screenshot-harness");
 const dropManifestPath = path.join(root, ".tmp", "drop", "pbiviz.json");
 const outputDirectory = path.join(root, "assets", "screenshots");
 const stagingDirectory = path.join(root, ".tmp", "screenshots");
+const captureRecordPath = path.join(root, "assets", "screenshot-capture.json");
 const resourcesPath = path.join(root, "stringResources", "en-US", "resources.resjson");
 
 const verifyOnly = process.argv.includes("--verify");
@@ -132,6 +142,111 @@ const describeFailure = (id, failures, discarded) =>
         ? "  Nothing was published: this run is --verify."
         : `  No committed ${id}.png was present to discard.`
   ].join("\n");
+
+/**
+ * The measurements a scene was accepted on, in a form that survives the run.
+ * The assertions themselves are ephemeral - they pass, print, and are gone -
+ * so what is kept is the evidence they were applied to, not a bare verdict.
+ */
+const evidenceFor = (probe) => ({
+  cards: probe.graph.cards,
+  edges: probe.graph.edges,
+  levels: probe.graph.depthColumns,
+  labels: probe.graph.labels,
+  subtitles: probe.graph.subtitles,
+  visual: probe.root,
+  canvas: { width: probe.canvas.width, height: probe.canvas.height },
+  tree: {
+    onScreen: probe.tree.onScreen,
+    height: probe.tree.height,
+    rows: probe.tree.rows,
+    expanded: probe.tree.expandedRows,
+    collapsed: probe.tree.collapsedRows,
+    focusedRow: probe.tree.focusedRow
+  },
+  search: { value: probe.search.value, matches: probe.search.matches },
+  diagnostics: { lines: probe.diagnostics.lines, height: probe.diagnostics.height },
+  status: probe.status,
+  breadcrumb: probe.breadcrumb
+});
+
+/**
+ * Writes the record that makes a committed screenshot re-checkable.
+ *
+ * The hashes here pin the bytes that were just published, read back off disk.
+ * They are deliberately NOT an expectation that a later render will reproduce
+ * them, and nothing downstream may treat them that way: two captures of the
+ * same commit on the same machine differ by a handful of pixels at a single
+ * channel value, and the Linux runner produces PNGs some 45% larger from the
+ * same source. Re-rendering and comparing images would fail constantly for
+ * reasons that have nothing to do with correctness.
+ *
+ * What a hash does prove is that the file in the repository is still the file
+ * the assertions were applied to. A screenshot edited, reverted or swapped
+ * after capture passes every other gate; it cannot pass this one.
+ */
+const writeCaptureRecord = (packaged, channel, results) => {
+  const record = {
+    documentation:
+      "Written by npm run screenshots. Each sha256 pins the committed bytes the assertions were applied to; " +
+      "it is not a golden image. Renders are not bit-stable, so this must never become a re-render comparison.",
+    capturedWith: {
+      visualGuid: packaged.guid,
+      visualVersion: packaged.version,
+      browser: channel,
+      viewport: `${WIDTH}x${HEIGHT}`
+    },
+    scenes: results.map(({ id, probe }) => {
+      const published = path.join(outputDirectory, `${id}.png`);
+      const bytes = fs.readFileSync(published);
+      return {
+        id,
+        path: `assets/screenshots/${id}.png`,
+        bytes: bytes.length,
+        sha256: crypto.createHash("sha256").update(bytes).digest("hex").toUpperCase(),
+        asserted: evidenceFor(probe)
+      };
+    })
+  };
+  fs.writeFileSync(captureRecordPath, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
+};
+
+/**
+ * --verify re-renders, so it can also tell whether the committed record still
+ * describes what the current source draws. Only the measured content is
+ * compared: bytes and hashes are excluded on purpose, because they are
+ * expected to differ on any machine other than the one that captured.
+ */
+const findRecordDrift = (results) => {
+  if (!fs.existsSync(captureRecordPath)) {
+    return [`${path.relative(root, captureRecordPath)} is missing; run "npm run screenshots" to record the capture`];
+  }
+  const record = JSON.parse(fs.readFileSync(captureRecordPath, "utf8"));
+  const recorded = new Map((record.scenes ?? []).map((scene) => [scene.id, scene]));
+  const drift = [];
+  for (const { id, probe } of results) {
+    const scene = recorded.get(id);
+    if (!scene) {
+      drift.push(`${id} rendered but is not in the capture record`);
+      continue;
+    }
+    const now = JSON.stringify(evidenceFor(probe));
+    if (JSON.stringify(scene.asserted) !== now) {
+      drift.push(
+        `${id} no longer renders what the capture record describes:\n` +
+          `    recorded ${JSON.stringify(scene.asserted)}\n` +
+          `    rendered ${now}`
+      );
+    }
+  }
+  for (const id of recorded.keys()) {
+    if (!results.some((result) => result.id === id)) {
+      drift.push(`${id} is in the capture record but no scenario renders it`);
+    }
+  }
+  return drift;
+};
 
 const summarise = (probe) =>
   [
@@ -242,8 +357,11 @@ const capture = async () => {
     for (const { id, staged } of results) {
       fs.copyFileSync(staged, path.join(outputDirectory, `${id}.png`));
     }
+    writeCaptureRecord(packaged, channel, results);
   }
   fs.rmSync(stagingDirectory, { recursive: true, force: true });
+
+  const drift = verifyOnly ? findRecordDrift(results) : [];
 
   console.log(
     `${verifyOnly ? "Verified" : "Rendered"} ${packaged.guid} ${packaged.version} with ${channel} at ${WIDTH}x${HEIGHT}`
@@ -253,9 +371,20 @@ const capture = async () => {
     console.log(`    ${probe.status}`);
     console.log(`    ${probe.breadcrumb}`);
   }
+  if (drift.length > 0) {
+    throw new Error(
+      [
+        `The committed capture record no longer matches what the source renders:`,
+        ...drift.map((entry) => `  - ${entry}`),
+        `  Re-run "npm run screenshots" so ${path.relative(root, captureRecordPath)} describes the current build.`
+      ].join("\n")
+    );
+  }
   console.log(
     `All ${results.length} scenes met their content expectations before capture.` +
-      (verifyOnly ? " Nothing was written: this run is --verify." : "")
+      (verifyOnly
+        ? ` The committed ${path.relative(root, captureRecordPath).replace(/\\/g, "/")} still describes this render; nothing was written.`
+        : ` Recorded in ${path.relative(root, captureRecordPath).replace(/\\/g, "/")}.`)
   );
 };
 
